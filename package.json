@@ -1,5 +1,5 @@
 {
-  "name": "scripts2",
+  "name": "basic_node_server",
   "version": "1.0.0",
   "description": "server of scripts",
   "main": "server.js",
@@ -10,15 +10,16 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@elastic/elasticsearch": "file:@elastic/elasticsearch",
-    "canvas": "^2.4.1",
-    "chart.js": "^2.8.0",
-    "chartjs": "^0.3.24",
-    "chartjs-node-canvas": "^2.0.1",
-    "elasticsearch": "^15.4.1",
     "express": "^4.16.4",
-    "express-handlebars": "^3.0.2",
     "node-rest-client": "^3.1.0"
   },
-  "devDependencies": {}
+  "devDependencies": {},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jminor717/node-js_server.git"
+  },
+  "bugs": {
+    "url": "https://github.com/jminor717/node-js_server/issues"
+  },
+  "homepage": "https://github.com/jminor717/node-js_server#readme"
 }
