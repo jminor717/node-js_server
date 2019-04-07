@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+
+
+<html>
+  <head>
+    <title>jkherjnvk handlebars</title>
+        <script type="text/javascript">
+          function log(){
+
+            			 
+			 var xmlreq = new XMLHttpRequest();
+			 xmlreq.open("get", "user_asyinc");
+				xmlreq.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+				xmlreq.send();
+			 
+			 
+				xmlreq.onreadystatechange = function() {
+			        if (this.readyState == 4 && this.status == 200) {
+			        	var ress=this.responseText;
+			        	console.log(ress);
+			        	
+			       }
+			    };
+
+
+           
+      console.log(document.getElementById("myFrame").onload= function() {log()})
+          }
+          //document.getElementById("myFrame").onload = function() {log()};
+
+      
+  </script>
+  </head>
+  <body >
+    <div id="myFrame" > {{name}} </div>
+    	<script>
+		 log();
+	</script>
+  </body>
+</html>
