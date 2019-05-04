@@ -1,5 +1,5 @@
 const express = require('express')
-const port = 3000
+const port = 80
 express.Router.call()
 const app = express()
 
@@ -25,6 +25,13 @@ app.get("/", function(req, res) {
  console.log("/user/add");
  res.send("OK");
  });
+
+ app.post("/school"+/^(.+)$/, function(req, res) { 
+    /* some server side logic */
+    console.log(req.params[0]);
+    school.handlepostRequest(req, res)
+});
+
 
 /* serves all the static files */
 app.get(/^(.+)$/, function(req, res){ 

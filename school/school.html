@@ -2,15 +2,35 @@
 
 
 <html>
-    <head>
-        <link rel="stylesheet" type="text/css" href="school.css">
-        <title>school defalt page</title>
-        <script type="text/javascript" src="school_home.js"></script>
-    </head>
-    <body >
-    
-        <script>
-            init();
-        </script>
-    </body>
+
+<head>
+    <link rel="stylesheet" type="text/css" href="school.css">
+    <title>school defalt page</title>
+
+</head>
+
+<body>
+    <div id=weatherBackground>
+
+        <div id="weather">
+            <div id="overlay" onclick="logclick()">
+                <img src="/schoolimg/YCP_logo-outline.png" id="ycplgoweth" height="166" width="379">
+                <img src="/schoolimg/IEEE_logo_png.png" id="iEEElgoweth" height="142" width="400">
+                <div id="currentWeather">
+
+                </div>
+                <div id="weatherForcast">
+                        
+                </div>
+            </div>
+
+        </div>
+    </div>
+    <script type="text/javascript" src="school_home.js"></script>
+    <script>
+        //1200   427
+        init();
+    </script>
+</body>
+
 </html>

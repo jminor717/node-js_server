@@ -1,5 +1,60 @@
 body {
     background-color: #909090;
-    background-repeat: no-repeat;
-    background-size: auto;
+    /*background-image: url('/schoolimg/cloudy.jpg') ;*/
+
+}  
+
+#weatherBackground{
+    transition: ease-in-out, left 3s  cubic-bezier(0.62,-0.49, 0.65, 0.98);
+    position: fixed;
+    top: 0px;
+    left: 0px;
+    color: white;
+}
+
+#weather {
+    position: relative;
+    top: 0px;
+    left: 0px;
+    transition: background-image 3s cubic-bezier(0.73,-0.52, 0.29, 1.04);
+}
+
+#currentWeather{
+    position: relative;
+    top: 100px;
+    left: 50px;
+}
+
+#weatherForcast{
+    position: relative;
+    top: 200px;
+    left: 50px;
+}
+
+.forcastContainer{
+    display: inline-block; /* the default for span */
+    
+    /*padding: 5px;*/
+}
+
+#overlay{
+    height: 100%;
+    width:100%;
+    background-color:rgba(32, 32, 32, 0.61);
+    position: relative;
+    left:0;
+    top:0;
+    visibility: visible;
+}
+
+#ycplgoweth{
+    position: fixed;
+    right:0px;
+    top:0px;
+}
+
+#iEEElgoweth{
+    position: fixed;
+    right:0px;
+    bottom:0px;
 }

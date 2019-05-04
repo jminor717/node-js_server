@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>jake minor test game</title>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+		<style>
+			body {
+				color: #61443e;
+				font-family:Monospace;
+				font-size:13px;
+				text-align:center;
+				background-color: #bfd1e5;
+				margin: 0px;
+				overflow: hidden;
+				
+				/*cursor: none;*/
+				
+			}
+			#info {
+				position: absolute;
+				top: 0px; width: 100%;
+				padding: 5px;
+			}
+			a {
+				color: #a06851;
+			}
+			#ui{
+			font-size: 15px;
+			position: fixed;
+			top:50%;
+			right:50%;
+			color:white;
+			font-size: 15px;
+			}
+
+			#blocker {
+			position: absolute;
+			width: 100%;
+			height: 100%;
+			background-color: rgba(0,0,0,0.5);
+			}
+
+			#instructions {
+			width: 100%;
+			height: 100%;
+			
+			display: -webkit-box;
+			display: -moz-box;
+			display: box;
+
+			-webkit-box-orient: horizontal;
+			-moz-box-orient: horizontal;
+			box-orient: horizontal;
+
+			-webkit-box-pack: center;
+			-moz-box-pack: center;
+			box-pack: center;
+
+			-webkit-box-align: center;
+			-moz-box-align: center;
+			box-align: center;
+
+			color: #ffffff;
+			text-align: center;
+
+			cursor: pointer;
+
+			}
+
+		</style>
+	</head>
+	<body id="body">
+		<div id="container"><br /><br /><br /><br /><br />Generating world...</div>
+		<div id="info"><br />(W A S D standard,  R F up/down,  Q E roll, AROW KEYS pitch/yaw )</div>
+
+		<div id="blocker">
+
+				<div id="instructions">
+					<span style="font-size:40px">Click to play</span>
+					<br />
+					(W, A, S, D = Move, SPACE = Jump, MOUSE = Look around)
+				</div>
+	
+		</div>
+
+		<script src="../build/three.js"></script>
+		<!-- 
+		<script src="js/controls/FlyControls.js"></script>
+
+		-->
+		<script src="js/controls/PointerLockControls.js"></script>
+		<script src="FlyControls.js"></script>
+		<script src="js/Detector.js"></script>
+		<script src="js/libs/stats.min.js"></script>
+
+
+		<script>
+		//	var hpl='pointerLockElement' in document || 'mozPointerLockElement' in document || 'webkitPointerLockElement' in document;
+			
+			var camera, controls, scene, renderer , mouse ,raycaster,intersected;
+			var mesh;
+			var objects=[];
+			//var objectarray=[[[[]]]];
+			var objectarray=[];
+			
+			var bullets=[];
+			var targetmesh;
+			var worldWidth = 64, worldDepth = 64;
+			var clock = new THREE.Clock();
+			var cardinals=[];
+			
+			rayFloor = new THREE.Raycaster();
+            rayFloor.ray.direction.set( 0, -1, 0 );
+
+            rayWall = new THREE.Raycaster();
+            rayWall.ray.direction.set(0,0,1);
+
+			
+			var craftgeom = new THREE.SphereGeometry( 4, 20, 20 );
+			//var craftgeom = new THREE.BoxGeometry( 5, 5, 5);
+			craftgeom.computeBoundingSphere();
+				for ( var i = 0, l = craftgeom.faces.length; i < l; i ++ ) {
+
+					var face = craftgeom.faces[ i ];
+					face.vertexColors[ 0 ] = new THREE.Color().setHSL( Math.random() * 0.3 + 0.5, 0.75, Math.random() * 0.25 + 0.75 );
+					face.vertexColors[ 1 ] = new THREE.Color().setHSL( Math.random() * 0.3 + 0.5, 0.75, Math.random() * 0.25 + 0.75 );
+					face.vertexColors[ 2 ] = new THREE.Color().setHSL( Math.random() * 0.3 + 0.5, 0.75, Math.random() * 0.25 + 0.75 );
+
+				}
+
+					var coloredMaterial = new THREE.MeshPhongMaterial( { specular: 0xffffff, flatShading: true, vertexColors: THREE.VertexColors } );
+					coloredMaterial.color.setHSL( Math.random() * 0.2 + 0.5, 0.75, Math.random() * 0.25 + 0.75 );
+
+					var craft = new THREE.Mesh( craftgeom, coloredMaterial );
+					craft.mass=80;
+
+				var matrix = new THREE.Matrix4();
+				var pxGeometry = new THREE.PlaneBufferGeometry( 4, 4 );
+				pxGeometry.attributes.uv.array[ 1 ] = 0.5;
+				pxGeometry.attributes.uv.array[ 3 ] = 0.5;
+				pxGeometry.rotateY( Math.PI / 2 );
+				pxGeometry.translate( 2, 0, 0 );
+				var nxGeometry = new THREE.PlaneBufferGeometry( 4, 4 );
+				nxGeometry.attributes.uv.array[ 1 ] = 0.5;
+				nxGeometry.attributes.uv.array[ 3 ] = 0.5;
+				nxGeometry.rotateY( - Math.PI / 2 );
+				nxGeometry.translate( - 2, 0, 0 );
+				var pyGeometry = new THREE.PlaneBufferGeometry( 4, 4 );
+				pyGeometry.attributes.uv.array[ 5 ] = 0.5;
+				pyGeometry.attributes.uv.array[ 7 ] = 0.5;
+				pyGeometry.rotateX( - Math.PI / 2 );
+				pyGeometry.translate( 0, 2, 0 );
+				var nyGeometry = new THREE.PlaneBufferGeometry( 4, 4 );
+				nyGeometry.attributes.uv.array[ 5 ] = 0.5;
+				nyGeometry.attributes.uv.array[ 7 ] = 0.5;
+				nyGeometry.rotateX(  Math.PI / 2 );
+				nyGeometry.translate( 0, -2, 0 );
+				var pzGeometry = new THREE.PlaneBufferGeometry( 4, 4 );
+				pzGeometry.attributes.uv.array[ 1 ] = 0.5;
+				pzGeometry.attributes.uv.array[ 3 ] = 0.5;
+				pzGeometry.translate( 0, 0, 2 );
+				var nzGeometry = new THREE.PlaneBufferGeometry( 4, 4 );
+				nzGeometry.attributes.uv.array[ 1 ] = 0.5;
+				nzGeometry.attributes.uv.array[ 3 ] = 0.5;
+				nzGeometry.rotateY( Math.PI );
+				nzGeometry.translate( 0, 0, -2 );
+				//
+				// BufferGeometry cannot be merged yet.
+				var tmpGeometry = new THREE.Geometry();
+				var pxTmpGeometry = new THREE.Geometry().fromBufferGeometry( pxGeometry );
+				var nxTmpGeometry = new THREE.Geometry().fromBufferGeometry( nxGeometry );
+				var pyTmpGeometry = new THREE.Geometry().fromBufferGeometry( pyGeometry );
+				var nyTmpGeometry = new THREE.Geometry().fromBufferGeometry( nyGeometry );
+				var pzTmpGeometry = new THREE.Geometry().fromBufferGeometry( pzGeometry );
+				var nzTmpGeometry = new THREE.Geometry().fromBufferGeometry( nzGeometry );
+				
+				var worldgeometry = new THREE.BufferGeometry().fromGeometry( tmpGeometry );
+			
+				worldgeometry.computeBoundingSphere();
+				
+				var colorMaterial = new THREE.MeshPhongMaterial( { specular: 0xccffff, flatShading: true, vertexColors: THREE.VertexColors } );
+					colorMaterial.color.setHSL( Math.random() * 0.2 + 0.5, 0.75, Math.random() * 0.25 + 0.75 );
+
+				//
+				targetmesh = new THREE.Mesh( worldgeometry, colorMaterial);
+				
+				
+				var worldtgeom = new THREE.BoxGeometry( 50, 50, 500);
+				var world = new THREE.Mesh( worldtgeom, colorMaterial);
+				world.receiveShadow=true;
+				world.mass=Infinity;
+				world.material.side = THREE.BackSide;
+				
+				camera = new THREE.PerspectiveCamera( 60, window.innerWidth / window.innerHeight, 1, 200000 );
+				camera.position.z = 20; // this is relative to the cube's position
+				camera.position.y = 8;
+			
+				init();
+
+				var blocker = document.getElementById( 'blocker' );
+			var instructions = document.getElementById( 'instructions' );
+
+			var havePointerLock = 'pointerLockElement' in document || 'mozPointerLockElement' in document || 'webkitPointerLockElement' in document;
+
+			if ( havePointerLock ) {
+				var element = document.body;
+				var pointerlockchange = function ( event ) {
+					if ( document.pointerLockElement === element || document.mozPointerLockElement === element || document.webkitPointerLockElement === element ) {
+						controlsEnabled = true;
+						controls.enabled = true;
+						blocker.style.display = 'none';
+					} else {
+						controls.enabled = false;
+						blocker.style.display = 'block';
+						instructions.style.display = '';
+					}
+				};
+				var pointerlockerror = function ( event ) {
+					instructions.style.display = '';
+				};
+				// Hook pointer lock state change events
+				document.addEventListener( 'pointerlockchange', pointerlockchange, false );
+				document.addEventListener( 'mozpointerlockchange', pointerlockchange, false );
+				document.addEventListener( 'webkitpointerlockchange', pointerlockchange, false );
+
+				document.addEventListener( 'pointerlockerror', pointerlockerror, false );
+				document.addEventListener( 'mozpointerlockerror', pointerlockerror, false );
+				document.addEventListener( 'webkitpointerlockerror', pointerlockerror, false );
+
+				instructions.addEventListener( 'click', function ( event ) {
+					instructions.style.display = 'none';
+					// Ask the browser to lock the pointer
+					element.requestPointerLock = element.requestPointerLock || element.mozRequestPointerLock || element.webkitRequestPointerLock;
+					element.requestPointerLock();
+				}, false );
+			} else {
+				instructions.innerHTML = 'Your browser doesn\'t seem to support Pointer Lock API';
+			}
+
+
+			//navigator.requestMouseLock();
+			if ( ! Detector.webgl ) {
+				Detector.addGetWebGLMessage();
+				document.getElementById( 'container' ).innerHTML = "";
+			}
+			var container, stats;
+			container = document.getElementById( 'container' );
+
+
+
+
+			//init();
+			animate();
+			function init() {
+
+				container = document.getElementById( 'container' );
+				scene = new THREE.Scene();
+				scene.add( craft );
+				
+				craft.add(camera);
+				
+				controls = new THREE.FlyControls( craft );
+				//controls = new THREE.PointerLockControls( craft );
+				controls.movementSpeed = 1;
+				controls.domElement = container;
+				controls.rollSpeed = .8;
+				controls.autoForward = false;
+				controls.dragToLook = true;
+
+				var geometry = new THREE.SphereGeometry( 2, 50, 50);
+				geometry.computeBoundingSphere();
+				
+				cardinals.push(new THREE.Vector3(1,0,0));
+				cardinals.push(new THREE.Vector3(-1,0,0));
+				cardinals.push(new THREE.Vector3(0,1,0));
+				cardinals.push(new THREE.Vector3(0,-1,0));
+				cardinals.push(new THREE.Vector3(0,0,1));
+				cardinals.push(new THREE.Vector3(0,0,-1));
+	
+				raycaster = new THREE.Raycaster();
+
+				mouse = new THREE.Vector2();
+				
+
+				scene.background = new THREE.Color( 0xa0a0a0 );
+
+				scene.add( world );
+				var ambientLight = new THREE.AmbientLight( 0x404040 ,1);
+				scene.add( ambientLight );
+
+				var light = new THREE.HemisphereLight( 0xcfcfcf, 0x440000, 0.75 );
+				light.position.set( 0.5, 1, 0.75 );
+				light.castShadow = true;          
+
+				scene.add( light );
+
+				renderer = new THREE.WebGLRenderer();
+				renderer.setPixelRatio( window.devicePixelRatio );
+				renderer.setSize( window.innerWidth, window.innerHeight );
+				container.innerHTML = "";
+				container.appendChild( renderer.domElement );
+				stats = new Stats();
+				container.appendChild( stats.dom );
+				//
+				document.addEventListener( 'mousedown', onDocumentmousedown, false );
+				window.addEventListener( 'resize', onWindowResize, false );
+			}
+			function onWindowResize() {
+				camera.aspect = window.innerWidth / window.innerHeight;
+				camera.updateProjectionMatrix();
+				renderer.setSize( window.innerWidth, window.innerHeight );
+				controls.handleResize();
+			}
+
+			function onDocumentmousedown( event ) {
+
+				event.preventDefault();
+				
+				
+				//bullets
+				///*
+				raycaster.setFromCamera( mouse, camera );
+
+				var intersects = raycaster.intersectObjects( scene.children );
+				var vel =new THREE.Vector3();
+				
+				
+				if ( intersects.length > 0 ) {
+
+					var intersect = intersects[ 0 ];
+					var poin = intersect.point;
+					vel= new THREE.Vector3(
+					poin.x-craft.position.x,
+					poin.y-craft.position.y,
+					poin.z-craft.position.z
+				);
+				vel.normalize();
+
+				} 
+				//*/
+				
+				var bullet = new THREE.Mesh(
+					new THREE.SphereGeometry(.5,8,8),
+					new THREE.MeshBasicMaterial({color:0xfffccf})
+				);
+				
+				bullet.position.set(
+					craft.position.x,
+					craft.position.y,
+					craft.position.z
+				);
+				var mate = new THREE.Matrix4();
+				mate.makeRotationFromQuaternion  (camera.quaternion );
+				bullet.velocity = new THREE.Vector3(
+					0,
+					0,
+					-1
+				);
+				//bullet.velocity = vel;
+				bullet.velocity.applyMatrix4(mate);
+				//console.log(craft);
+				bullet.velocity.add(craft.veloicity);
+				//bullet.velocity=pointing;
+				console.log(camera);
+				bullets.push(bullet);
+				scene.add(bullet);
+				
+	
+			}
+			
+		
+			//
+			function animate() {
+				requestAnimationFrame( animate );
+				//console.log(world);
+				for(var index=0; index<bullets.length; index+=1){
+					bullets[index].position.add(bullets[index].velocity);
+					raycaster = new THREE.Raycaster( bullets[index].position.clone(), bullets[index].velocity.clone().normalize(), 2,5 );
+					var intersects = raycaster.intersectObjects( objects );
+					if ( intersects.length > 0 ) {
+						if ( intersected != intersects[ 0 ].object ) {
+							intersected = intersects[ 0 ].object;
+							scene.remove( intersected );
+						}
+					} 
+				}
+	
+				for(var i=0; i<objects.length;i++){//colision detection for objects
+					for(var v=0; v<objects.length;v++){ //colision detection between targets
+						if(v!=i){
+							var dist=objects[i].position.clone().sub(objects[v].position);
+							var inside=dist.length();
+							var totalr= objects[i].geometry.boundingSphere.radius+objects[v].geometry.boundingSphere.radius;
+							inside-=totalr;
+							if (inside<0){
+								var force= dist.clone().setLength(inside) ;
+								
+								objects[i].velocity.sub(force.divideScalar( objects[i].mass ));
+								objects[v].velocity.add(force.divideScalar( objects[v].mass ));
+								objects[i].velocity.divideScalar( 1.1);
+								objects[v].velocity.divideScalar( 1.1);
+							}
+						}	
+					}
+					//cardinals
+					for (var j=0;j<cardinals.length;j++){					
+						var direct= cardinals[j].clone().sub( objects[i].position );
+						//console.log(direct);
+						var raycaster = new THREE.Raycaster( objects[i].position, cardinals[j].clone().normalize(), 0, objects[i].geometry.boundingSphere.radius);
+
+						var intersects = raycaster.intersectObject( world);
+						//console.log(direct);
+						
+						if (intersects.length>0){
+							var inside=objects[i].geometry.boundingSphere.radius-intersects[ 0 ].distance;
+							var dir=intersects[ 0 ].face.normal.clone(); 
+							var force= dir.clone().setLength(inside) ;
+							
+							objects[i].velocity.sub(force );
+							objects[i].velocity.divideScalar( 1.1);
+						}
+					}
+				}
+				render();
+				stats.update();
+			}
+			function render() {
+				controls.update( clock.getDelta(),craft,world ,scene,camera,objects);
+				renderer.render( scene, camera );
+			}
+		</script>
+		<div id = "ui">
+		+
+		
+		</div>
+
+	</body>
+</html>

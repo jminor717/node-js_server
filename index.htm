@@ -2,335 +2,60 @@
 
 
 <html>
-  <head>
+
+<head>
     <link rel="stylesheet" type="text/css" href="index_style.css">
-    <title>jkherjnvk handlebars</title>
-        <script type="text/javascript">
-          function log(){
-            var data;
-            			 
-			 var xmlreq = new XMLHttpRequest();
-			 xmlreq.open("post", "userasyinc");
-				xmlreq.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-				xmlreq.send();
-			 
-			 
-				xmlreq.onreadystatechange = function() {
-          if (this.readyState == 4 && this.status == 200) {
-              var ress=this.responseText;
-              console.log(ress);
-              data=JSON.parse(ress)
-              console.log(data);
-            }
-        };
-            
+    <title>title</title>
+    <script type="text/javascript">  </script>
+    <!--<script src="/chat.js"></script>-->
+</head>
 
-                var xmlreq2 = new XMLHttpRequest();
-			 xmlreq2.open("get", "weather");
-				xmlreq2.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-				xmlreq2.send();
-			 
-			 
-				xmlreq2.onreadystatechange = function() {
-			        if (this.readyState == 4 && this.status == 200) {
-			        	var ress=this.responseText;
-                    console.log(ress);
-                    document.getElementById("myFrame").innerHTML =ress;
-                    data=JSON.parse(ress)
-                    console.log(data);
-                        
-			       }
-        };
-
-
-      //console.log(data)
-      console.log(document.getElementById("myFrame"))
-      document.getElementById("myFrame").style.border="solid red";
-
-    }
-          //document.getElementById("myFrame").onload = function() {log()};
-
-      
-  </script>
-  <script src="/chat.js"></script>
-  </head>
-  <body >
-    <div id="myFrame" > {{name}} </div>
-
-
-	
-	
-    <div id="bannerholder" onclick="home()">
-			
-			
-      </div>
-      <div id="banner" onclick="home()">
+<body>
+    <div id="bannerholder" onclick="home()"> </div>
+    <div id="banner" onclick="home()">
         this is the title of our website (img)
-        <a>
-          <img id="acountopt" onclick="toggleacountoptions()" src="img/loginicon.png"  />
-        
-        </a>
-      </div>
-      
-  <!-- start user options -->
-        <div class="smallroundcorners" id= "acountoptions">
-        <img id="userphoto" onclick="toggleacountoptions()" src="img/largeloginicon.png"  />
-        <div id="usernamedisplay">
-          placeholdery
-        </div>
-          <button id="login"  onclick="logclick()" >login</button>
-          
-          <form action="${pageContext.servletContext.contextPath}/userinfo" method="get">
-            <input type="Submit" name="submit" value="userinfo">
-          </form>
-        <form action="${pageContext.servletContext.contextPath}/pmpage" method="post">
-          <!--  -->
-            
-            <input id="pmuseropt" name="newuser" type="submit" value="privatte mesage    " />
-          </form>
-        
-        
-          
-        </div>
-      
-  <!-- end user options -->		
-      
-      <div id="pageoptions">
-      
-        <button id="showchatbutt" onclick="togglechat() ">__</button>
-    
-        
-        
-      
-       </div>
-       
-       <!-- start chat html /////////////////////////-->
-       
-       
-      <div id="chatwindow">
-        <div id="chatoptions">
-        <button id="hidechatbutt" onclick="togglechat() ">__</button>
-        <!-- <button id="refresfchatbut" onclick="post() ">refresh</button> -->
-        <button id="refresfchatbut" onclick="post()  ">refresh</button>
-        
-        
-          
-        </div>
-      <div id="chattabs" >
-          <button class="swithchchatactive" onclick="newchat(event,'general')  ">general</button>
-          <button class="swithchchat" onclick="newchat(event,'towerdef1')  ">towerdef1</button>
-          <div id="usercahtscontainer" onmouseover="toggleuserchats(true);" onmouseout="toggleuserchats(false);">
-            <button class="swithchchat"  id ="showuserchats">your chats</button>
-            <div id="userchats">
-            <!-- <button id="swithcuserchat" class=" swithchchat" onclick="newchat(event,'general')  ">chat 1</button>-->
-            
-            </div>
-            
-          </div>
-          
-        </div>
-        
-        <div id="chattext">
-        
-      
-      
-        </div>
-        
-        
-        <div id="chatinput">
-          <p>add comment</p>
-          
-            <textarea class="smallroundcorners" name="chatinputtext" rows="5" cols="38" id="chattextarea" > </textarea>
-          
-          
-          
-          
-          <button onclick="post()">post</button>
-          
-          
-          
-          
-        </div>
-        
-       </div>
-       <!-- end fixed chat window -->
-        <div id="newchatoverlay"  onclick="newwuserchat(false)" >
-          
-          
-          </div>
-          
-          
-          <div class="medroundcorners" id="newchatwindow">
-        
-          <table>
-            <tr>
-              <td class="label">name of chat:</td>
-            <td><input id="inputchatname" type="text" placeholder="Enter chat name" name="spec_chatname" size="20" class="smallroundcorners"  /></td>
-            </tr>
-            
-                  
-          </table>
-          <button   onclick="newwuserchat(false)" >cancle</button>
-  
-        <button   onclick="createuserchat(false)" >create chat</button>
-        <button   onclick="createuserchat(true)" >add  chat</button>
-      </div>
-      
-      
-       <div id="chatuseroptionsoverlay"  onclick="otheruseroptions(false)" >        </div>
-          
-          
-          <div class="medroundcorners" id="chatuseropt">
-        <button   onclick="otheruseroptions(false)" >cancle</button>
-        
-        <form action="${pageContext.servletContext.contextPath}/pmpage" method="post">
-          <!--  -->
-            
-            <input id="pmbutton" name="newuser" type="submit" value="privatte mesage" />
-            <input class="hide" id="pmid" type="text" name="pmid" value="0" >
-          </form>
-        <button   onclick="addtoblacklist()" >blacklist (WIP)</button>
-      </div>
-      
-      
-      <!--end chat html -->
-      
-      
-      
-      
-      <div id ="allgames">
-      <ul>
-        <li> 
-          <form action="${pageContext.servletContext.contextPath}/Gamewindow" method="get">
-            <input name="newuser" type="submit" value="Coin Flip" />
-          </form>
-        </li>
-        <li>
-        <form action="${pageContext.servletContext.contextPath}/Game2window" method="get">
-            <input name="newuser" type="submit" value="Card Game" />
-          </form>
-        </li>
-        <li><form action="${pageContext.servletContext.contextPath}/Game3window" method="get">
-            <input name="newuser" type="submit" value="Shooter" />
-          </form>
-        </li>
-        <li><form action="${pageContext.servletContext.contextPath}/Game4window" method="get">
-            <input name="newuser" type="submit" value="3D Pong" />
-          </form>
-        </li>
-        <li><form action="${pageContext.servletContext.contextPath}/snakeGame" method="get">
-            <input name="newuser" type="submit" value="Snake Game" />
-          </form>
-        </li>
-      </ul>	
-      
-       </div>
-      
-      
-      
-      
-        
-    
-      <div id="featuredgames"> 
-      
-        <div class= "gamedisplay">
-        <form action="${pageContext.servletContext.contextPath}/Gamewindow" method="get">
-          
-            <input type="image" src="img/coinflip.png" alt="Submit" onmouseover="this.src='img/giphy.gif'" onmouseout="this.src='img/coinflip.png'"style="width:256px;height:256px;"  > 
-          <div class="gametitle">
-            <input name="newuser" type="submit" value="Coin Flip" />
-          </div>
-        </form>
-        </div>
-        
-        <div class= "gamedisplay">
-        <form action="${pageContext.servletContext.contextPath}/Game2window" method="get">
-          
-            <input type="image" src="img/cardgame.png" alt="Submit" onmouseover="this.src='img/giphy.gif'" onmouseout="this.src='img/cardgame.png'"style="width:256px;height:256px;"  > 
-          <div class="gametitle">
-            <input name="newuser" type="submit" value="Card Game" />
-          </div>
-        </form>
-        </div>
-        
-        <div class= "gamedisplay">
-        <form action="${pageContext.servletContext.contextPath}/Game3window" method="get">
-          
-            <input type="image" src="img/game3snap.png" alt="Submit" onmouseover="this.src='img/giphy.gif'" onmouseout="this.src='img/game3snap.png'"style="width:256px;height:256px;"  > 
-          <div class="gametitle">
-            <input name="newuser" type="submit" value="Yeet Shooter" />
-          </div>
-        </form>
-        </div>
-        
-        
-        <div class= "gamedisplay">
-          <form action="${pageContext.servletContext.contextPath}/Game4window" method="get">
-          
-            <input type="image" src="img/pong.png" alt="Submit" onmouseover="this.src='img/giphy.gif'" onmouseout="this.src='img/pong.png'"style="width:256px;height:256px;"  > 
-          </form>
-          <div class="gametitle">
-            <form action="${pageContext.servletContext.contextPath}/Game4window" method="get">
-              <input name="newuser" type="submit" value="3D Pong" />
-            </form>
-            <form action="${pageContext.servletContext.contextPath}/multysetup" method="get">
-              <input name="newuser" type="submit" value=" multyplayer" />
-            </form>
-          </div>
-        
-        </div>
-  
-        <div class= "gamedisplay">
-        <form action="${pageContext.servletContext.contextPath}/snakeGame" method="get">
-          
-            <input type="image" src="img/game5.png" alt="Submit" onmouseover="this.src='img/giphy.gif'" onmouseout="this.src='img/game5.png'"style="width:256px;height:256px;"  > 
-          <div class="gametitle">
-            <input name="newuser" type="submit" value="Snake Game" />
-          </div>
-        </form>
-        </div>
-  
-  
-        </div>
-        
-      </div>
-  <!-- start user -->
-          <div id="loginoverlay"  onclick="logclick()" >
-          
-          
-          </div>
-           
-          
-          <div class="medroundcorners" id="loginwindow">
-        <form id="loginpost" action="${pageContext.servletContext.contextPath}/index" method="post">
-          <table>
-            <tr>
-              <td class="label">username:</td>
-            <td><input  id="uzer" type="text" placeholder="Enter Username" name="username" size="20" class="smallroundcorners" value="${ model.username     }" /></td>
-            </tr>
-            <tr>
-              <td class="label">Password:</td>
-            <td><input id="pass" type="password" placeholder="Enter password" name="password" size="20" class="smallroundcorners" value="${  model.password   }" /></td>
-                      
-            </tr>
-                  
-          </table>
-          <input type="Submit" name="loginsubmit" value="login">
-        </form>
-        
-          <form action="${pageContext.servletContext.contextPath}/newuser" method="get">
-        
-          <input name="newuser" type="submit" value="new user" />
-        
-      
-        </form>
-        
-        <button id="canclelog"  onclick="logclick()" >cancle</button>
-      </div>
+    </div>
+    <div id="allgames">
+        <ul>
+            <li>
+                <form action="/mygame" method="get">
+                    <input type="submit" value="Shooter" />
+                </form>
+            </li>
+        </ul>
+    </div>
 
-    	<script>
-         log();
-         post();
-	</script>
-  </body>
+
+    <div id="featuredgames">
+        <div class="gamedisplay">
+            <form action="/mygame" method="get">
+                <input type="image" src="img/game3snap.png" alt="Submit" onmouseover="this.src='img/giphy.gif'"
+                    onmouseout="this.src='img/game3snap.png'" style="width:256px;height:256px;">
+                <div class="gametitle">
+                    <input type="submit" value="Yeet Shooter" />
+                </div>
+            </form>
+        </div>
+
+        <div class="gamedisplay">
+            <form action="${pageContext.servletContext.contextPath}/Game4window" method="get">
+                <input type="image" src="img/pong.png" alt="Submit" onmouseover="this.src='img/giphy.gif'"
+                    onmouseout="this.src='img/pong.png'" style="width:256px;height:256px;">
+            </form>
+            <div class="gametitle">
+                <form action="${pageContext.servletContext.contextPath}/Game4window" method="get">
+                    <input name="newuser" type="submit" value="3D Pong" />
+                </form>
+                <!--
+                <form action="${pageContext.servletContext.contextPath}/multysetup" method="get">
+                    <input name="newuser" type="submit" value=" multyplayer" />
+                </form>
+            -->
+            </div>
+        </div>
+    </div>
+
+    <script> //log(); </script>
+</body>
+
 </html>
