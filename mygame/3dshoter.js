@@ -2,16 +2,15 @@ Physijs.scripts.worker = 'Physijs/physijs_worker.js';
 Physijs.scripts.ammo = 'Physijs/examples/js/ammo.js';
 var camera, scene, renderer, controls;
 //Physijs/Physijs/examples/js
-var objects = [];
-var bullets = [];
-var craft, test, mouse;
+var craft;
 //var arrowHelper
 var raycaster;
-var lasst;
 var tmpQuaternion = new THREE.Quaternion();
 var blocker = document.getElementById('blocker');
 var instructions = document.getElementById('instructions');
 var havePointerLock = 'pointerLockElement' in document || 'mozPointerLockElement' in document || 'webkitPointerLockElement' in document;
+var trackedObjects = {};
+
 if (havePointerLock) {
     var element = document.body;
     var pointerlockchange = function (event) {
@@ -47,8 +46,8 @@ if (havePointerLock) {
     instructions.innerHTML = 'Your browser doesn\'t seem to support Pointer Lock API';
 }
 
-init();
-animate();
+//init();
+//animate();
 
 var controlsEnabled = false;
 var stopnow = false;
@@ -69,7 +68,7 @@ function staticinit() {
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 1, 1000);
     scene = new Physijs.Scene;
     scene.background = new THREE.Color(0xffffff);
-    scene.fog = new THREE.Fog(0xffffff, 0, 750);
+    scene.fog = new THREE.Fog(0xffffff, 0, 300);
     var light = new THREE.HemisphereLight(0xeeeeff, 0x777788, 0.75);
     light.position.set(0.5, 1, 0.75);
     scene.add(light);
@@ -110,6 +109,11 @@ function staticinit() {
     craft.position.set(0, 10, 0)
     //camera.position.set(0, 10, 10)
     craft.add(camera);
+    //trackedObjects.push({
+    //   type: "craft",
+    //    vel: craft._physijs.linearVelocity,
+    //    pos: craft.position
+    // })
     console.log(craft)
 
     controls = new THREE.PointerLockControls(craft);
@@ -189,13 +193,14 @@ function staticinit() {
 
 }
 
-function init() {
+function init2(objs) {
     staticinit()
     var box_geometry_target = new THREE.BoxGeometry(20, 20, 20)
     handleCollisiontarget = function (collided_with, linearVelocity, angularVelocity, contact_normal) {
         if (collided_with.dealDamage === true) {
             var dif = (this._physijs.linearVelocity.clone().add(linearVelocity.clone())).length()
             this.health -= ((dif) / (this._physijs.mass / collided_with._physijs.mass));
+
             switch (Math.round(((this.health / this.startingHealth) * 6))) {
                 case 1: this.material.color.setHex(0xcc8855); break;
                 case 2: this.material.color.setHex(0xbb9955); break;
@@ -208,25 +213,56 @@ function init() {
         if (this.health < 0) {
             scene.remove(this);
         }
+        //console.log(this.health)
+        updatebyUUid(this, "BoxGeometry")
     }
-    createBoxtarget = function (health) {
+    createBoxtarget = function (health, pos, vel, rot, rotvel, uuid) {
         var box, material;
         material = Physijs.createMaterial(new THREE.MeshPhongMaterial({ specular: 0xffffff, flatShading: true, vertexColors: THREE.VertexColors }), 0.6, 0.3);
         box = new Physijs.BoxMesh(box_geometry_target, material);
         box.health = health;
         box.startingHealth = health;
-        box.position.x = Math.floor(Math.random() * 20 - 10) * 20;
-        box.position.y = Math.floor(Math.random() * 20) * 20 + 10;
-        box.position.z = Math.floor(Math.random() * 20 - 10) * 20;
-        box.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+        if (pos == null) {
+            box.position.x = Math.floor(Math.random() * 20 - 10) * 20;
+            box.position.y = Math.floor(Math.random() * 20) * 20 + 10;
+            box.position.z = Math.floor(Math.random() * 20 - 10) * 20;
+        } else { box.position.x = pos.x; box.position.y = pos.y; box.position.z = pos.z; }
+        if (rot == null) { box.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI); }
+        else { box.rotation.set(rot._x, rot._y, rot._z); }
         box.castShadow = true;
+        if (uuid != null) { box.uuid = uuid }
         box.addEventListener('collision', handleCollisiontarget);
         scene.add(box);
+        box.Id = box.uuid;
+        if (vel != null) { box.setLinearVelocity(vel) }
+        if (rotvel != null) { box.setAngularVelocity(rotvel) }
+        trackedObjects[box.uuid] = {
+            type: "BoxGeometry",
+            vel: box._physijs.linearVelocity,
+            pos: box.position,
+            rot: box.rotation,
+            rotvel: box._physijs.angularVelocity,
+            uuid: box.uuid,
+            helt: box.health
+        }
+    }
+    if (objs == null) {
+        for (var i = 0; i < 100; i++) {
+            createBoxtarget(100, null, null, null, null, null)
+        }
+        doneinit();
+    } else {
+        console.log(objs)
+        for (bock in objs) {
+            var bocks = objs[bock]
+            if (bocks.type != "craft") {
+                if (bocks.type == "BoxGeometry") {
+                    createBoxtarget(bocks.helt, bocks.pos, bocks.vel, bocks.rot, bocks.rotvel, bocks.uuid)
+                }
+            }
+        }
     }
 
-    for (var i = 0; i < 100; i++) {
-        createBoxtarget(100)
-    }
 
     renderer = new THREE.WebGLRenderer();
     renderer.setPixelRatio(window.devicePixelRatio);
@@ -235,16 +271,30 @@ function init() {
     window.addEventListener('resize', onWindowResize, false);
     document.addEventListener('mousedown', onDocumentmousedown, false);
     mouse = new THREE.Vector2();
-    //arrowHelper = new THREE.ArrowHelper( new THREE.Vector3(0, 0, -10), craft.position, 20, 0xffff00 );
-    //scene.add(arrowHelper);
-    lasst = craft._physijs.linearVelocity.clone();
-    doneinit();
+
 }///////////innit   ************************************************************************************************************#################################
 
-function createscene(objects) {
-    objects.forEach(ele => {
-        //console.log(ele)
-        //scene.add(ele)
+function createscene(obj) {
+    console.log("create scene")
+    init2(obj)
+    animate()
+}
+
+function updatescene(objs) {
+    scene.children.forEach(child => {
+        if (child.uuid in objs) {
+            var bocks = objs[child.uuid]
+            if (bocks.type != "craft") {
+                if (bocks.type == "BoxGeometry") {
+                    child.health=bocks.helt
+                    child.position=bocks.pos
+                    child.rotation=bocks.rot
+                    child.setAngularVelocity(bocks.rotvel)
+                    child.setLinearVelocity(bocks.vel)
+                    //console.log(child)
+                }
+            }
+        }
     })
 }
 

@@ -32,76 +32,35 @@ const wss = new WebSocket.Server({
     }
 });
 
+
 wss.on("connection", function (socket) {
-    var count = 0;
-    //console.log(socket)
     socket.on('event', data => { console.log(data) });
     socket.on("message", data => {
-        //console.log(socket)
-        if (scene == null) {
-            scene ={"type":"scene", "objects":JSON.parse(data)}
-            console.log(scene)
-        }else{
-            socket.send(JSON.stringify(scene))
+        data = JSON.parse(data)
+        console.log(data)
+        if (data.task == "getobjects") {
+            socket.send(JSON.stringify({task:"create", data:scene}))
         }
+        if (data.task == "setscene") {
+            scene = data.data;
+        }
+
+        //if (scene == null) {
+        // scene ={"task":"scene", "objects":JSON.parse(data)}
+        //console.log(scene)
+        //}else{
+
+        //}
     });
+            setInterval(() => {
+            socket.send(JSON.stringify({task:"update", data:scene}))
+        }, 500);
     socket.emit("ih")
     socket.ping("cefuybgihn")
     wss.emit("gybibhn")
 })
 
-//socket.send(JSON.stringify({cmd:count}))
-//wss.on("headers", data => { console.log(data) });
 
-/*
-var io1 = require('socket.io').listen(8123);
-
-io1.on('connection', function(socket1) {
-  socket1.on('bar', function(msg1) {
-    console.log(msg1);
-  });
-});
-
-
-
-var http = require('http').createServer(app);
-var io = require('socket.io')(http);
-io.on('connection', client => {
-    client.on('event', data => { console.log(data) });
-    client.on('disconnect', () => { console.log("event") });
-    console.log(client)
-});
-
-io.on('connection', function (socket) {
-    console.log('an user connected');
-});
-
-const server = require('http').createServer();
-const io = require('socket.io')(server);
-io.on('connection', client => {
-  client.on('event', data => { console.log(data) });
-  client.on('disconnect', () => { console.log("event") });
-  console.log(client)
-});
-server.listen(3000);
-
-const server = require('http').createServer(app);
-const io = require('socket.io')(server);
-
-//*///var os = require("os");
-//var hostname = os.hostname();
-
-//const app = require('express')();
-
-
-//server.listen(3000);
-//*/
-/*
-const server = require('http').createServer(app);
-const io = require('socket.io')(server);
-io.on('connection', () => { console.log("event") });
-server.listen(3000);
-//*/
 
 const school = require('./school/school.js')
 
