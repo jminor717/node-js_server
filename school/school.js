@@ -83,7 +83,7 @@ function weather(req, res) {
             dat["now"] = {};
             dat["now"] = data[0]; ins++;
             dat.now.experation = zeroTwo.getTime() + (45 * 60000);//set experation for 45 mins from now
-            console.log(dat.now.experation)
+            //console.log(dat.now.experation)
             if (zeroTwo.getHours() > 22 || zeroTwo.getHours() < 8) {//if during off hours , extend exiration time
                 dat.now.experation += (30 * 60000);
             }

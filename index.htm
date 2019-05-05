@@ -7,7 +7,34 @@
     <link rel="stylesheet" type="text/css" href="index_style.css">
     <title>title</title>
     <script type="text/javascript">  </script>
-    <!--<script src="/chat.js"></script>-->
+    <script src='/socket.io.js'></script>
+    <!--<script src="/chat.js"></script>
+    
+    <script>
+        //c:\repos\node-js_server\socket.io\index.html
+        var socket = io();
+
+        socket.on('welcome', function (data) {
+            addMessage(data.message);
+
+            // Respond with a message including this clients' id sent from the server
+            socket.emit('i am client', { data: 'foo!', id: data.id });
+        });
+        socket.on('time', function (data) {
+            addMessage(data.time);
+        });
+        socket.on('error', console.error.bind(console));
+        socket.on('message', console.log.bind(console));
+
+        function addMessage(message) {
+            var text = document.createTextNode(message),
+                el = document.createElement('li'),
+                messages = document.getElementById('messages');
+
+            el.appendChild(text);
+            messages.appendChild(el);
+        }
+    </script>-->
 </head>
 
 <body>
@@ -38,13 +65,13 @@
         </div>
 
         <div class="gamedisplay">
-            <form action="${pageContext.servletContext.contextPath}/Game4window" method="get">
+            <form action="/pong" method="get">
                 <input type="image" src="img/pong.png" alt="Submit" onmouseover="this.src='img/giphy.gif'"
                     onmouseout="this.src='img/pong.png'" style="width:256px;height:256px;">
             </form>
             <div class="gametitle">
-                <form action="${pageContext.servletContext.contextPath}/Game4window" method="get">
-                    <input name="newuser" type="submit" value="3D Pong" />
+                <form action="/pong" method="get">
+                    <input type="submit" value="3D Pong" />
                 </form>
                 <!--
                 <form action="${pageContext.servletContext.contextPath}/multysetup" method="get">
@@ -55,7 +82,53 @@
         </div>
     </div>
 
-    <script> //log(); </script>
+    <script> //log();
+        /*
+            var Socket = new WebSocket('ws://192.168.1.39/');//, [protocal]
+            Socket.onopen = function () {
+                connection.send("myid :" + 53); // Send the message 'Ping' to the server
+                //connection.send("othr :" + otherid);
+            };
+    //*/
+        var isopen = false;
+        var start;
+        connection = new WebSocket('ws://192.168.1.39:8080');
+        connection.onopen = function () {
+            start=new Date().getTime();
+            connection.send( "ping"); // Send the message 'Ping' to the server //  /website/Game4scocket   
+            isopen = true;
+        };
+
+        //connection.addEventListener()
+        //connection.onmessage(data)
+        connection.onmessage = function (data) {
+            dta=JSON.parse( data.data)
+            //console.log(dta)
+            if(dta.cmd>=5000){
+                console.log(data)
+                console.log(new Date().getTime()-start)
+            }else{
+                connection.send(2626)
+            }
+            
+            //sent()
+
+            //console.log(data.data)
+            //console.log(1)
+        }
+        
+        function sent(){
+            connection.send(2626)
+        }
+        //setInterval(sent,2000)
+//*/
+//var socket2 = io().connect('ws://localhost:8123');;
+//var io2 = require('socket.io-client');
+//var socket2 = io2.connect('http://localhost:8123');
+
+//var msg2 = "hello";
+//socket2.emit('foo', msg2);
+    </script>
 </body>
 
 </html>
