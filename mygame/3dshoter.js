@@ -10,7 +10,7 @@ var blocker = document.getElementById('blocker');
 var instructions = document.getElementById('instructions');
 var havePointerLock = 'pointerLockElement' in document || 'mozPointerLockElement' in document || 'webkitPointerLockElement' in document;
 var trackedObjects = {};
-
+var uuidcount = 1
 if (havePointerLock) {
     var element = document.body;
     var pointerlockchange = function (event) {
@@ -230,10 +230,19 @@ function init2(objs) {
         if (rot == null) { box.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI); }
         else { box.rotation.set(rot._x, rot._y, rot._z); }
         box.castShadow = true;
-        if (uuid != null) { box.uuid = uuid }
+        if (uuid != null) {
+            box.uuid = uuid
+
+
+        }
+        else {
+            var o = new Uint32Array(1);
+            window.crypto.getRandomValues(o)
+            box.uuid = o[0]
+        }
         box.addEventListener('collision', handleCollisiontarget);
         scene.add(box);
-        box.Id = box.uuid;
+        //box.Id = box.uuid;
         if (vel != null) { box.setLinearVelocity(vel) }
         if (rotvel != null) { box.setAngularVelocity(rotvel) }
         trackedObjects[box.uuid] = {
@@ -243,12 +252,13 @@ function init2(objs) {
             rot: box.rotation,
             rotvel: box._physijs.angularVelocity,
             uuid: box.uuid,
-            helt: box.health
+            helt: box.health,
+            self: box
         }
     }
     if (objs == null) {
         for (var i = 0; i < 100; i++) {
-            createBoxtarget(100, null, null, null, null, null)
+            createBoxtarget(100.1, null, null, null, null, null)
         }
         doneinit();
     } else {
@@ -257,7 +267,7 @@ function init2(objs) {
             var bocks = objs[bock]
             if (bocks.type != "craft") {
                 if (bocks.type == "BoxGeometry") {
-                    createBoxtarget(bocks.helt, bocks.pos, bocks.vel, bocks.rot, bocks.rotvel, bocks.uuid)
+                    createBoxtarget(bocks.helt+0.1, bocks.pos, bocks.vel, bocks.rot, bocks.rotvel, bocks.uuid)
                 }
             }
         }
@@ -280,20 +290,64 @@ function createscene(obj) {
     animate()
 }
 
+function updateobj(update){
+    //console.log(update)
+    let obj = trackedObjects[update.id];
+    //console.log(obj)
+    let that = obj.self;
+    that.__dirtyPosition = true;
+    that.position.x = update.pos.x
+    that.position.y = update.pos.y
+    that.position.z = update.pos.z
+    that.__dirtyRotation = true;
+    that.rotation.set(update.rot.x, update.rot.y, update.rot.z);
+    that.health = update.helt
+    that.__dirtyVelocity = true;
+    that.setLinearVelocity(new THREE.Vector3(update.vel.x, update.vel.y, update.vel.z))
+    that.setAngularVelocity(new THREE.Vector3(update.rotvel.x, update.rotvel.y, update.rotvel.z))
+    
+    if (that.health == that.startingHealth) { return; }
+    switch (Math.round(((that.health / that.startingHealth) * 6))) {
+        case 1: that.material.color.setHex(0xcc8855); break;
+        case 2: that.material.color.setHex(0xbb9955); break;
+        case 3: that.material.color.setHex(0xaaaa55); break;
+        case 4: that.material.color.setHex(0x99bb55); break;
+        case 5: that.material.color.setHex(0x88cc55); break;
+        case 6: that.material.color.setHex(0x77dd55); break;
+    }
+}
+
 function updatescene(objs) {
-    scene.children.forEach(child => {
-        if (child.uuid in objs) {
-            var bocks = objs[child.uuid]
-            if (bocks.type != "craft") {
-                if (bocks.type == "BoxGeometry") {
-                    child.health=bocks.helt
-                    child.position=bocks.pos
-                    child.rotation=bocks.rot
-                    child.setAngularVelocity(bocks.rotvel)
-                    child.setLinearVelocity(bocks.vel)
-                    //console.log(child)
-                }
-            }
+    console.log(objs)
+    objs.forEach(update => {
+        let obj = trackedObjects[update.uuid];
+        //console.log(obj)
+        let that = obj.self;
+        that.__dirtyPosition = true;
+        that.position.x = update.pos.x
+        that.position.y = update.pos.y
+        that.position.z = update.pos.z
+        that.__dirtyRotation = true;
+        that.rotation._x = update.rot._x
+        that.rotation._y = update.rot._y
+        that.rotation._z = update.rot._z
+        that.health = update.helt
+        //console.log(update.vel)
+        that.__dirtyVelocity = true;
+        that.setLinearVelocity(update.vel)
+        console.log(update.pos, that.position)
+        console.log(update.rotvel)
+        that.setAngularVelocity(new THREE.Vector(update.rotvel.x, update.rotvel.y, update.rotvel.z));
+        //that.setAngularVelocity(new THREE.Vector3(update.rotvel.x, update.rotvel.y, update.rotvel.z))
+
+        if (that.health == that.startingHealth) { return; }
+        switch (Math.round(((that.health / that.startingHealth) * 6))) {
+            case 1: that.material.color.setHex(0xcc8855); break;
+            case 2: that.material.color.setHex(0xbb9955); break;
+            case 3: that.material.color.setHex(0xaaaa55); break;
+            case 4: that.material.color.setHex(0x99bb55); break;
+            case 5: that.material.color.setHex(0x88cc55); break;
+            case 6: that.material.color.setHex(0x77dd55); break;
         }
     })
 }
@@ -487,6 +541,21 @@ function single(total, speed, event) {
 function animate() {
     requestAnimationFrame(animate);
     //console.log(arrowHelper)
+
+    for (uuid in trackedObjects) {
+        let obj = trackedObjects[uuid];
+        let vel = obj.self._physijs.linearVelocity;
+        let rotvel = obj.self._physijs.angularVelocity;
+        mat = new THREE.Matrix4().makeScale(.98, .98, .98)
+        vel.applyMatrix4(mat);
+        rotvel.applyMatrix4(mat);
+        obj.self.setLinearVelocity(vel);
+        obj.self.setAngularVelocity(rotvel)
+        if (obj.self._physijs.linearVelocity.length() > 3) {
+            //obj.self.setLinearVelocity(new THREE.Vector3(0, 0, 0))
+            updatebyUUid(obj.self, "BoxGeometry")
+        }
+    }
     if (controlsEnabled === true) {
         velocity = craft._physijs.linearVelocity
 

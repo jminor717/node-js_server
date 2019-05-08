@@ -29,28 +29,26 @@ function start() {
 
 connection.onmessage = function (data) {
     //console.log(data.data)
-    let obj = JSON.parse(data.data)
-    if(obj.task=="create"){
-        createscene(obj.data)
+    try{
+        let obj = JSON.parse(data.data)
+        if(obj.task=="create"){
+            createscene(obj.data)
+        }
+        if(obj.task=="uda"){
+            updatescene(obj.data)
+        }
+    }catch(err){
+        connection.binaryType = 'arraybuffer';
+        //console.log(data)
+        updateobj(frombytes(data.data,4))
     }
-    if(obj.task=="update"){
-        updatescene(obj.data)
-    }
+
 }
 
 function sent() {
     connection.send(2626)
 }
 function updatebyUUid(obj,tipe){
-    trackedObjects[obj.uuid]={
-        type: tipe,
-        vel: obj._physijs.linearVelocity,
-        pos: obj.position,
-        rot: obj.rotation,
-        rotvel: obj._physijs.angularVelocity,
-        uuid: obj.uuid,
-        helt: obj.health
-    }
-    //console.log(obj)
-    connection.send(JSON.stringify({"task":"setscene", "data":trackedObjects }))
+    dat= tobytes(obj.position,obj._physijs.linearVelocity,obj.rotation,obj._physijs.angularVelocity,obj.health,obj.uuid,4)
+    connection.send(dat)
 }

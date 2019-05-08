@@ -6,7 +6,7 @@ var app = require('express')();
 app.listen(port, function () {
     console.log("Listening on " + port);
 });
-var scene = null;
+const parse = require('./byteParser.js')
 const WebSocket = require('ws');
 
 const wss = new WebSocket.Server({
@@ -32,33 +32,77 @@ const wss = new WebSocket.Server({
     }
 });
 
-
+var scene = null;
+var clients = [], updates = [], clientId = 1;
 wss.on("connection", function (socket) {
+
+    clients.push({ socket: socket, id: clientId, lastUpdate: new Date().getTime() })
+    let self = { socket: socket, id: clientId, lastUpdate: new Date().getTime() };
+    clientId++;
     socket.on('event', data => { console.log(data) });
     socket.on("message", data => {
-        data = JSON.parse(data)
-        console.log(data)
-        if (data.task == "getobjects") {
-            socket.send(JSON.stringify({task:"create", data:scene}))
-        }
-        if (data.task == "setscene") {
-            scene = data.data;
+        try {
+            data = JSON.parse(data)
+            //console.log(data)
+            if (data.task == "getobjects") {
+                socket.send(JSON.stringify({ task: "create", data: scene }))
+                self.lastUpdate = new Date().getTime()
+            }
+            if (data.task == "setscene") {
+                scene = data.data;
+            }
+            if (data.task == "uda") {
+                //scene[data.data.uuid]=data.data;
+                //updates.push({updates:data.data,sentTo:1,time:new Date().getTime(),from:self.id})
+            }
+        } catch (err) {
+            socket.binaryType = 'arraybuffer';
+            //console.log( data)
+            //console.log( parse.frombytesnode(data,4).id)
+            var datas=parse.frombytesnode(data, 4)
+            updates.push({ updates:datas , sentTo: 1, time: new Date().getTime(), from: self.id })
+            if(scene[datas.id]==null){return}
+            scene[datas.id].vel=datas.vel;
+            scene[datas.id].pos=datas.pos;
+            scene[datas.id].rotvel=datas.rotvel;
+            scene[datas.id].helt=datas.helt;
+            scene[datas.id].rot._x=datas.rot.x
+            scene[datas.id].rot._y=datas.rot.y
+            scene[datas.id].rot._z=datas.rot.z
+            
         }
 
-        //if (scene == null) {
-        // scene ={"task":"scene", "objects":JSON.parse(data)}
-        //console.log(scene)
-        //}else{
+        //console.log(data)
 
-        //}
     });
-            setInterval(() => {
-            socket.send(JSON.stringify({task:"update", data:scene}))
-        }, 500);
+    setInterval(() => {
+        
+        let requiredupdates = getupdates(self)
+        if (requiredupdates.length == 0) { return; }
+        //console.log(requiredupdates,self.id)
+        requiredupdates.forEach(uda => {
+            socket.binaryType = 'arraybuffer';
+            socket.send(parse.tobytesnode(uda, 4))
+        })
+        //socket.send(JSON.stringify({ task: "uda", data: requiredupdates }))
+    }, 100);
     socket.emit("ih")
     socket.ping("cefuybgihn")
     wss.emit("gybibhn")
 })
+
+
+function getupdates(to) {
+    let from = to.lastUpdate;
+    let required = [];
+    for (var i = 0; i < updates.length; i++) {
+        if (from < updates[i].time && to.id != updates[i].from) {
+            required.push(updates[i].updates); updates[i].sentTo++;
+            if (updates[i].sentTo >= clients.length) { updates.splice(i, 1); i-- }
+        }
+    }
+    return required
+}
 
 
 
@@ -120,11 +164,11 @@ app.post("/school/weatherdata", function (req, res) {
 
 function game(req, res) {
     //console.log('static file request : ' + "/mygame/misc_controls_pointerlock.html");
-    res.sendfile(__dirname + "/mygame/misc_controls_pointerlock.html");
+    res.sendFile(__dirname + "/mygame/misc_controls_pointerlock.html");
 }
 function pong(req, res) {
     //console.log('static file request : ' + "/mygame/pong3.html");
-    res.sendfile(__dirname + "/mygame/pong3.html");
+    res.sendFile(__dirname + "/mygame/pong3.html");
 }
 function index(req, res) {
     //console.log("index");
