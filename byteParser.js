@@ -1,9 +1,12 @@
 module.exports = {
     tobytesnode: function (obj, precesion = 4) {
-        return tobytes(obj.pos, obj.vel, obj.rot, obj.rotvel,obj.helt, obj.id, precesion);
+        return tobytes(obj.pos, obj.vel, obj.rot, obj.rotvel, obj.helt, obj.id, precesion);
     },
-    frombytesnode: function (buffer, precesion = 4) {
-        return frombytes(buffer, precesion);
+    frombytesnode: function (buffer) {
+        return frombytes(buffer);
+    },
+    frombytesgroupnode: function (buffer) {
+        return frombytesgroup(buffer);
     }
 }
 //toArrayBuffer(buffer)
@@ -42,11 +45,11 @@ function tobytes(pos, vel, rot, rotvel, health, id, precesion = 4) {
     return bufferf
 }
 
-function frombytes(buffer, precesion = 4) {
-    var tmp = (12 * precesion)+precesion
+function frombytes(buffer) {
+    //var tmp = (12 * precesion)+precesion
     //console.log(buffer)
-    var Float32View = new Float32Array(buffer.slice(0, tmp));
-    var uint32view = new Uint32Array(buffer.slice(tmp, tmp + precesion))
+    var Float32View = new Float32Array(buffer);
+    var uint32view = new Uint32Array(buffer)
     //console.log(uint32view)
     return {
         pos: {
@@ -70,6 +73,91 @@ function frombytes(buffer, precesion = 4) {
             z: Float32View[11]
         },
         helt: Float32View[12],
-        id: uint32view[0]
+        id: uint32view[13]
     }
+}
+
+
+function objtipebyte(code = new ArrayBuffer()) {
+    var tmp = new Uint32Array(code)
+    var tmp2 = new Float32Array(code);
+    switch (tmp[0]) {
+        case 1://box
+            x = tmp2[1]
+            y = tmp2[2]
+            z = tmp2[3]
+            console.log(x, y, z)
+            break;
+        case 2://ball
+            r = tmp2[1]
+            console.log(r)
+            break;
+        default:
+            break;
+    }
+}
+
+function objtipetoByte(tipe = "", dim = {}) {
+    var buffer = new ArrayBuffer(16);
+    switch (tipe) {
+        case "box"://box
+            buffer = new ArrayBuffer(16)
+            var tmp = new Uint32Array(buffer)
+            tmp[0] = 1;
+            tmp = new Float32Array(buffer);
+            tmp[1] = dim.x;
+            tmp[2] = dim.y;
+            tmp[3] = dim.z;
+            break;
+        case "sphere"://ball
+            buffer = new ArrayBuffer(8)
+            var tmp = new Uint32Array(buffer)
+            tmp[0] = 2;
+            tmp = new Float32Array(buffer);
+            tmp[1] = dim.r;
+            break;
+        default:
+            break;
+    }
+    return buffer
+}
+
+
+function frombytesgroup(buffer) {
+    total = buffer.byteLength / 64
+    //console.log(buffer)
+    var objss={};
+    for (var i = 0; i < total; i++) {
+        var Float32View = new Float32Array(buffer, (i * 64), 16);
+        var uint32view = new Uint32Array(buffer, (i * 64), 16);
+        //console.log(uint32view,Float32View)
+        objss[uint32view[13]]={
+            pos: {
+                x: Float32View[0],
+                y: Float32View[1],
+                z: Float32View[2]
+            },
+            vel: {
+                x: Float32View[3],
+                y: Float32View[4],
+                z: Float32View[5]
+            },
+            rot: {
+                x: Float32View[6],
+                y: Float32View[7],
+                z: Float32View[8]
+            },
+            rotvel: {
+                x: Float32View[9],
+                y: Float32View[10],
+                z: Float32View[11]
+            },
+            helt: Float32View[12],
+            id: uint32view[13],
+            r: Float32View[15]
+        }
+
+    }
+    //console.log(objss)
+    return objss;
 }

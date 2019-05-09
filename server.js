@@ -37,19 +37,21 @@ var clients = [], updates = [], clientId = 1;
 wss.on("connection", function (socket) {
 
     clients.push({ socket: socket, id: clientId, lastUpdate: new Date().getTime() })
-    let self = { socket: socket, id: clientId, lastUpdate: new Date().getTime() };
+    var self = { socket: socket, id: clientId, lastUpdate: new Date().getTime() };
     clientId++;
     socket.on('event', data => { console.log(data) });
     socket.on("message", data => {
         try {
             data = JSON.parse(data)
-            //console.log(data)
             if (data.task == "getobjects") {
                 socket.send(JSON.stringify({ task: "create", data: scene }))
                 self.lastUpdate = new Date().getTime()
             }
             if (data.task == "setscene") {
                 scene = data.data;
+                for (id in scene){
+                    console.log(id)
+                }
             }
             if (data.task == "uda") {
                 //scene[data.data.uuid]=data.data;
@@ -57,35 +59,61 @@ wss.on("connection", function (socket) {
             }
         } catch (err) {
             socket.binaryType = 'arraybuffer';
-            //console.log( data)
-            //console.log( parse.frombytesnode(data,4).id)
-            var datas=parse.frombytesnode(data, 4)
-            updates.push({ updates:datas , sentTo: 1, time: new Date().getTime(), from: self.id })
-            if(scene[datas.id]==null){return}
-            scene[datas.id].vel=datas.vel;
-            scene[datas.id].pos=datas.pos;
-            scene[datas.id].rotvel=datas.rotvel;
-            scene[datas.id].helt=datas.helt;
-            scene[datas.id].rot._x=datas.rot.x
-            scene[datas.id].rot._y=datas.rot.y
-            scene[datas.id].rot._z=datas.rot.z
-            
+            if (data.byteLength == 4) {
+                var idds = new Uint32Array(data)
+                console.log(idds[0])
+                scene[idds[0]] = null
+                updates.push({ remove: data ,sentTo: 1, time: new Date().getTime(), from: self.id})
+            } else if (data.byteLength % 64 == 0) {
+                //total=data.byteLength/64
+                //var objs=parse.frombytesgroupnode(data)
+                updates.push({ updates: data, sentTo: 1, time: new Date().getTime(), from: self.id, bullett: true })
+            } else {
+                //console.log( data)
+                var datas = parse.frombytesnode(data)
+                updates.push({ updates: data, sentTo: 1, time: new Date().getTime(), from: self.id })
+                if (scene[datas.id] == null) {
+                    scene[datas.id] = {
+                        vel: datas.vel,
+                        pos: datas.pos,
+                        rotvel: datas.rotvel,
+                        helt: datas.helt,
+                        rot: {
+                            _x: datas.rot.x,
+                            _y: datas.rot.y,
+                            _z: datas.rot.z
+                        }
+                    }
+                } else {
+                    scene[datas.id].vel = datas.vel;
+                    scene[datas.id].pos = datas.pos;
+                    scene[datas.id].rotvel = datas.rotvel;
+                    scene[datas.id].helt = datas.helt;
+                    scene[datas.id].rot._x = datas.rot.x
+                    scene[datas.id].rot._y = datas.rot.y
+                    scene[datas.id].rot._z = datas.rot.z
+                }
+            }
         }
-
-        //console.log(data)
-
     });
     setInterval(() => {
-        
+
         let requiredupdates = getupdates(self)
         if (requiredupdates.length == 0) { return; }
         //console.log(requiredupdates,self.id)
         requiredupdates.forEach(uda => {
             socket.binaryType = 'arraybuffer';
-            socket.send(parse.tobytesnode(uda, 4))
+            if ("bullett" in uda) {
+                socket.send(uda.updates)
+            } else if ("remove" in uda) {
+                socket.send(uda.remove)
+            } else { 
+                socket.send(uda.updates)
+            }
+
         })
         //socket.send(JSON.stringify({ task: "uda", data: requiredupdates }))
-    }, 100);
+    }, 50);
     socket.emit("ih")
     socket.ping("cefuybgihn")
     wss.emit("gybibhn")
@@ -97,7 +125,8 @@ function getupdates(to) {
     let required = [];
     for (var i = 0; i < updates.length; i++) {
         if (from < updates[i].time && to.id != updates[i].from) {
-            required.push(updates[i].updates); updates[i].sentTo++;
+            //console.log(to.id , updates[i].from)
+            required.push(updates[i]); updates[i].sentTo++;
             if (updates[i].sentTo >= clients.length) { updates.splice(i, 1); i-- }
         }
     }

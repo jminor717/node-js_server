@@ -616,7 +616,7 @@ public_functions.onSimulationResume = function( params ) {
 };
 
 public_functions.setAngularVelocity = function ( details ) {
-
+    if(_objects[details.id]==null){return}
 	_vec3_1.setX(details.x);
 	_vec3_1.setY(details.y);
 	_vec3_1.setZ(details.z);
@@ -628,7 +628,7 @@ public_functions.setAngularVelocity = function ( details ) {
 };
 
 public_functions.setLinearVelocity = function ( details ) {
-
+    if(_objects[details.id]==null){return}
 	_vec3_1.setX(details.x);
 	_vec3_1.setY(details.y);
 	_vec3_1.setZ(details.z);
