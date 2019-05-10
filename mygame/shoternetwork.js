@@ -42,7 +42,7 @@ connection.onmessage = function (data) {
             var idds= new Uint32Array(data.data)
             console.log(idds[0])
             removeFromSceneById(idds[0])
-        }else if(data.data.byteLength % 64 == 0){
+        }else if(data.data.byteLength % 72 == 0){
             makebullete(frombytesgroup(data.data))
         }else{
             //console.log(data.data)

@@ -49,9 +49,9 @@ wss.on("connection", function (socket) {
             }
             if (data.task == "setscene") {
                 scene = data.data;
-                for (id in scene){
-                    console.log(id)
-                }
+                //for (id in scene){
+                    //console.log(id)
+                //}
             }
             if (data.task == "uda") {
                 //scene[data.data.uuid]=data.data;
@@ -61,7 +61,7 @@ wss.on("connection", function (socket) {
             socket.binaryType = 'arraybuffer';
             if (data.byteLength == 4) {
                 var idds = new Uint32Array(data)
-                console.log(idds[0])
+                //console.log(idds[0])
                 scene[idds[0]] = null
                 updates.push({ remove: data ,sentTo: 1, time: new Date().getTime(), from: self.id})
             } else if (data.byteLength % 64 == 0) {

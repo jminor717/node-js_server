@@ -97,7 +97,7 @@ function objtipebyte(code = new ArrayBuffer()) {
     }
 }
 
-function objtipetoByte(tipe = "", dim = {}) {
+function objtipetoByte(tipe = "", dim = {}, time,mass) {
     var buffer = new ArrayBuffer(16);
     switch (tipe) {
         case "box"://box
@@ -110,9 +110,11 @@ function objtipetoByte(tipe = "", dim = {}) {
             tmp[3] = dim.z;
             break;
         case "sphere"://ball
-            buffer = new ArrayBuffer(8)
+            buffer = new ArrayBuffer(16)
             var tmp = new Uint32Array(buffer)
             tmp[0] = 2;
+            tmp[2] = time;
+            tmp[3] = mass;
             tmp = new Float32Array(buffer);
             tmp[1] = dim.r;
             break;
@@ -124,14 +126,14 @@ function objtipetoByte(tipe = "", dim = {}) {
 
 
 function frombytesgroup(buffer) {
-    total = buffer.byteLength / 64
+    total = buffer.byteLength / 72
     //console.log(buffer)
-    var objss={};
+    var objss = {};
     for (var i = 0; i < total; i++) {
-        var Float32View = new Float32Array(buffer, (i * 64), 16);
-        var uint32view = new Uint32Array(buffer, (i * 64), 16);
+        var Float32View = new Float32Array(buffer, (i * 72), 18);
+        var uint32view = new Uint32Array(buffer, (i * 72), 18);
         //console.log(uint32view,Float32View)
-        objss[uint32view[13]]={
+        objss[uint32view[13]] = {
             pos: {
                 x: Float32View[0],
                 y: Float32View[1],
@@ -154,7 +156,9 @@ function frombytesgroup(buffer) {
             },
             helt: Float32View[12],
             id: uint32view[13],
-            r: Float32View[15]
+            r: Float32View[15],
+            tim: uint32view[16],
+            mas: uint32view[17]
         }
 
     }

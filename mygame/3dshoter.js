@@ -1,5 +1,5 @@
 Physijs.scripts.worker = 'Physijs/physijs_worker.js';
-Physijs.scripts.ammo = 'Physijs/examples/js/ammo.js';
+Physijs.scripts.ammo = 'Physijs/examples/js/ammo3.js';
 var camera, scene, renderer, controls;
 //Physijs/Physijs/examples/js
 var craft;
@@ -215,6 +215,7 @@ function init2(objs) {
             scene.remove(this);
         }
         //console.log(this.health)
+        if("notmine" in collided_with){return}
         updatebyUUid(this, "BoxGeometry")
     }
     createBoxtarget = function (health, pos, vel, rot, rotvel, uuid) {
@@ -362,161 +363,130 @@ function onWindowResize() {
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
 }
-function dermineCloseobjects(craft, objects) {
-    // console.log(craft)
-    // console.log(objects)
-    var close = [];
-    objects.forEach(function (mesh) {
-        //console.log(mesh.position);
-        if (mesh.position.distanceTo(craft) < 50) {
-            //console.log(mesh)
-            close.push(mesh)
-        }
-    });
-    return close;
-}
 
 
 function onDocumentmousedown(event) {
     //console.log(event.button,event.button,event.timeStamp)
-    if (event.button == 0) { single(400000, 400, event) }
-    if (event.button == 1) { grenade(250000, 50, event) }
-    if (event.button == 2) { shotgun(100000, 200, 10, event) }
-    for (obj in scene.children){
-       // console.log(scene.children[obj].uuid)
+    if (event.button == 0) { single(400000, 400, event,400) }
+    if (event.button == 1) { grenade(250000, 50, event,150) }
+    if (event.button == 2) { shotgun(400000, 200, 10, event,250) }
+    for (obj in scene.children) {
+        // console.log(scene.children[obj].uuid)
     }
 }
 
 
-function grenade(total, speed, event) {
+function grenade(total, speed, event,range) {
     event.preventDefault();
+    time=(range/speed)*1000
+    handleCollision = function (collided_with, linearVelocity, angularVelocity) {
+        scene.remove(this);
+        explosion(this.position, 100, this.mass);
+        //scene.remove(this)   //console.log(collided_with)
+    }
+    function removebullett(box) {
+        if (box.parent === scene) {
+            var center = box.position;
+            scene.remove(box);
+            explosion(center, 100, box.mass * 3);
+        }
+    }
+
+    event.preventDefault();
+    boxes = [];
     var diree = getdirection()
-    var box_geometry = new THREE.SphereGeometry(5, 8, 8),
-        handleCollision = function (collided_with, linearVelocity, angularVelocity) {
-            scene.remove(this);
-            explosion(this.position, 100, this.mass);
-            //scene.remove(this)   //console.log(collided_with)
-        },
-        createBox = function () {
-            var box, material;
-            material = Physijs.createMaterial(new THREE.MeshPhongMaterial({ specular: 0xffffff, flatShading: true, vertexColors: THREE.VertexColors }), .95, .3);
-            box = new Physijs.SphereMesh(box_geometry, material);
-
-            var ofset = diree.clone().normalize().multiplyScalar(10)
-            box.position.x = craft.position.x + ofset.x;
-            box.position.y = craft.position.y + ofset.y;
-            box.position.z = craft.position.z + ofset.z;
-            box.mass = total / speed;
-
-            box.castShadow = true;
-            box.dealDamage = true;
-            box.addEventListener('collision', handleCollision);
-            var o = new Uint32Array(1);
-            window.crypto.getRandomValues(o)
-            box.uuid = o[0]
-
-            setTimeout(removebullett.bind(null, box), 3000);
-            function removebullett(box) {
-                if (box.parent === scene) {
-                    var center = box.position;
-                    scene.remove(box);
-                    explosion(center, 100, box.mass * 3);
-                }
-            }
-
-            vel = diree.clone().normalize().multiplyScalar(speed)//.add(new THREE.Vector3((Math.random() * 50) - 25, (Math.random() * 50) - 25, (Math.random() * 50) - 25))
-            var cvel = craft._physijs.linearVelocity.clone()
-            //vel.applyMatrix4(mate)
-            scene.add(box);
-            //vel.applyEuler(craft.rotation)
-            vel.add(cvel)
-            box.setLinearVelocity(vel)
-        };
-    createBox()
+    var box_geometry = new THREE.SphereGeometry(5, 8, 8)
+    var material = Physijs.createMaterial(new THREE.MeshPhongMaterial({ specular: 0xffffff, flatShading: true, vertexColors: THREE.VertexColors }), .95, .3);
+    vel = diree.clone().normalize().multiplyScalar(speed)//.add(new THREE.Vector3((Math.random() * 50) - 25, (Math.random() * 50) - 25, (Math.random() * 50) - 25))
+    var cvel = craft._physijs.linearVelocity.clone()
+    vel.add(cvel)
+    var ofset = diree.clone().normalize().multiplyScalar(10)
+    var position = new THREE.Vector3(craft.position.x + ofset.x, craft.position.y + ofset.y, craft.position.z + ofset.z)
+    var bbx = makeprojectile(position, vel, (total / speed), null, box_geometry, material, 5,time)
+    boxes.push(bbx);
+    maketransit(boxes)
+    bbx.addEventListener('collision', handleCollision);
+    setTimeout(removebullett.bind(null, box), time);
 }
 
 function explosion(position, numobjects, totalmass) {
-    //event.preventDefault();
-    var mate = new THREE.Matrix4();
-    //mate.makeRotationFromQuaternion(craft.quaternion);
+    time=(200/400)*1000
     let boxes = []
     var box_geometry = new THREE.SphereGeometry(.5, 8, 8)
-    createpellet = function () {
-        var box, material;
-        material = Physijs.createMaterial(new THREE.MeshPhongMaterial({ specular: 0xffffff, flatShading: true, vertexColors: THREE.VertexColors }), .95, .3);
-        box = new Physijs.SphereMesh(box_geometry, material);
-
-        var ofset = new THREE.Vector3((Math.random() * 10) - 5, (Math.random() * 10) - 5, (Math.random() * 10) - 5)//.applyMatrix4(mate)
-        box.position.x = position.x + ofset.x;
-        box.position.y = position.y + ofset.y;
-        box.position.z = position.z + ofset.z;
-        box.mass = totalmass / numobjects;
-
-        box.castShadow = true;
-
-        var o = new Uint32Array(1);
-        window.crypto.getRandomValues(o)
-        box.uuid = o[0]
-        box.dealDamage = true;
-        box.dim = { r: .5 }
-
-        scene.add(box);
-        vel = new THREE.Vector3((Math.random() * 800) - 400, (Math.random() * 800) - 400, (Math.random() * 800) - 400);
-        //var cvel = craft._physijs.linearVelocity.clone()
-        //vel.add(cvel.applyMatrix4(mate))
-        //vel.applyMatrix4(mate)
-        box.setLinearVelocity(vel);
-        box.vel = vel
-        //console.log(box._physijs.linearVelocity)
-        boxes.push(box);
-    };
-    createpellet()
+    var material = Physijs.createMaterial(new THREE.MeshPhongMaterial({ specular: 0xffffff, flatShading: true, vertexColors: THREE.VertexColors }), .95, .3);
 
     for (var i = 0; i < numobjects; i++) {
-        createpellet()
+        var ofset = new THREE.Vector3((Math.random() * 10) - 5, (Math.random() * 10) - 5, (Math.random() * 10) - 5)
+        var position = new THREE.Vector3(position.x + ofset.x, position.y + ofset.y, position.z + ofset.z)
+        velocity = new THREE.Vector3((Math.random() * 800) - 400, (Math.random() * 800) - 400, (Math.random() * 800) - 400);
+        boxes.push(makeprojectile(position, velocity, (totalmass / numobjects), null, box_geometry, material, 0.5,time));
     }
     maketransit(boxes)
-    setTimeout(removebullett.bind(null, boxes), 500);
+    setTimeout(removebullett.bind(null, boxes), time);
     function removebullett(boxes) { boxes.forEach(box => { scene.remove(box); }) }
 }
 
-function shotgun(total, speed, pelets, event) {
+function shotgun(total, speed, pelets, event,range) {
+    time=(range/speed)*1000
     event.preventDefault();
     var diree = getdirection()
     var box_geometry = new THREE.SphereGeometry(.5, 8, 8)
-    createpellet = function () {
-        var box, material;
-        material = Physijs.createMaterial(new THREE.MeshPhongMaterial({ specular: 0xffffff, flatShading: true, vertexColors: THREE.VertexColors }), .95, .3);
-        box = new Physijs.SphereMesh(box_geometry, material);
-
-        var ofset = diree.clone().normalize().multiplyScalar(10).add(new THREE.Vector3((Math.random() * 2) - 1, (Math.random() * 2) - 1, (Math.random() * 2) - 1))
-        box.position.x = craft.position.x + ofset.x;
-        box.position.y = craft.position.y + ofset.y;
-        box.position.z = craft.position.z + ofset.z;
-        box.mass = total / speed;
-        box.dealDamage = true;
-        box.castShadow = true;
-
-        setTimeout(removebullett.bind(null, box), 2000);
-        function removebullett(box) { /*console.log(box);*/ scene.remove(box); }
-        var o = new Uint32Array(1);
-        window.crypto.getRandomValues(o)
-        box.uuid = o[0]
-        //vel = new THREE.Vector3((Math.random() * 50) - 25, (Math.random() * 50) - 25, -200);
-        vel = diree.clone().normalize().multiplyScalar(speed).add(new THREE.Vector3((Math.random() * 50) - 25, (Math.random() * 50) - 25, (Math.random() * 50) - 25))
-        var cvel = craft._physijs.linearVelocity.clone()
-        scene.add(box);
-        vel.add(cvel)
-        box.setLinearVelocity(vel)
-
-    };
-    //createpellet()
-
+    var material = Physijs.createMaterial(new THREE.MeshPhongMaterial({ specular: 0xffffff, flatShading: true, vertexColors: THREE.VertexColors }), .95, .3);
+    var cvel = craft._physijs.linearVelocity.clone()
+    let boxes = []
     for (var i = 0; i < pelets; i++) {
-        createpellet();
+        var ofset = diree.clone().normalize().multiplyScalar(10).add(new THREE.Vector3((Math.random() * 2) - 1, (Math.random() * 2) - 1, (Math.random() * 2) - 1))
+        var position = new THREE.Vector3(craft.position.x + ofset.x, craft.position.y + ofset.y, craft.position.z + ofset.z)
+        vel = diree.clone().normalize().multiplyScalar(speed).add(new THREE.Vector3((Math.random() * 50) - 25, (Math.random() * 50) - 25, (Math.random() * 50) - 25))
+        vel.add(cvel)
+        boxes.push(makeprojectile(position, vel, ((total / pelets) / speed), null, box_geometry, material, 0.5,time));
 
     }
+    maketransit(boxes)
+    setTimeout(removebullett.bind(null, boxes), time);
+    function removebullett(boxes) { boxes.forEach(box => { scene.remove(box); }) }
 }
+
+function single(total, speed, event,range) {
+    time=(range/speed)*1000
+    event.preventDefault();
+    boxes = [];
+    var diree = getdirection()
+    var box_geometry = new THREE.SphereGeometry(2, 8, 8)
+    var material = Physijs.createMaterial(new THREE.MeshPhongMaterial({ specular: 0xffffff, flatShading: true, vertexColors: THREE.VertexColors }), .95, .3);
+    vel = diree.clone().normalize().multiplyScalar(speed)//.add(new THREE.Vector3((Math.random() * 50) - 25, (Math.random() * 50) - 25, (Math.random() * 50) - 25))
+    var cvel = craft._physijs.linearVelocity.clone()
+    vel.add(cvel)
+    var ofset = diree.clone().normalize().multiplyScalar(10)
+    var position = new THREE.Vector3(craft.position.x + ofset.x, craft.position.y + ofset.y, craft.position.z + ofset.z)
+    boxes.push(makeprojectile(position, vel, (total / speed), time, box_geometry, material, 2,time));
+    maketransit(boxes)
+}
+
+
+function makeprojectile(position, velocity, mass, time, geomitty, material, radius,timeout) {
+    box = new Physijs.SphereMesh(geomitty, material);
+    box.dealDamage = true;
+    box.castShadow = true;
+    box.mass = mass;
+    box.position.x = position.x;
+    box.position.y = position.y;
+    box.position.z = position.z;
+    box.dim = { r: radius };
+    box.vel = velocity;
+    box.timeout=timeout
+    if (time != null) {
+        setTimeout(removebullett.bind(null, box), time);
+        function removebullett(box) { /*console.log(box);*/ scene.remove(box); }
+    }
+    var o = new Uint32Array(1);
+    window.crypto.getRandomValues(o);
+    box.uuid = o[0];
+    scene.add(box);
+    box.setLinearVelocity(velocity);
+    return box;
+}
+
 
 function getdirection() {
     var raycaster = new THREE.Raycaster();
@@ -526,38 +496,7 @@ function getdirection() {
     return intersects[0].point.sub(craft.position)
 }
 
-function single(total, speed, event) {
-    event.preventDefault();
-    var diree = getdirection()
-    var box_geometry = new THREE.SphereGeometry(2, 8, 8)
-    createBox = function () {
-        var box, material;
-        material = Physijs.createMaterial(
-            new THREE.MeshPhongMaterial({ specular: 0xffffff, flatShading: true, vertexColors: THREE.VertexColors }),
-            .95, // medium friction
-            .3 // low restitution
-        );
-        box = new Physijs.SphereMesh(box_geometry, material);
 
-        var ofset = diree.clone().normalize().multiplyScalar(10)
-        box.position.x = craft.position.x + ofset.x;
-        box.position.y = craft.position.y + ofset.y;
-        box.position.z = craft.position.z + ofset.z;
-        box.mass = total / speed;
-        box.dealDamage = true;
-        box.castShadow = true;
-
-        setTimeout(removebullett.bind(null, box), 2000);
-        function removebullett(box) { /*console.log(box);*/ scene.remove(box); }
-
-        vel = diree.clone().normalize().multiplyScalar(speed)//.add(new THREE.Vector3((Math.random() * 50) - 25, (Math.random() * 50) - 25, (Math.random() * 50) - 25))
-        var cvel = craft._physijs.linearVelocity.clone()
-        scene.add(box);
-        vel.add(cvel)
-        box.setLinearVelocity(vel)
-    };
-    createBox()
-}
 
 function animate() {
     requestAnimationFrame(animate);
@@ -651,20 +590,13 @@ function maketransit(objs = []) {
     var buffer = new ArrayBuffer()
     for (objnum in objs) {
         obj = objs[objnum]
-        //console.log(obj._physijs.linearVelocity)
         var firs56 = tobytes(obj.position, obj.vel, obj.rotation, obj._physijs.angularVelocity, obj.health, obj.uuid, 4)
-        var las8 = objtipetoByte("sphere", obj.dim)
-        //if(buffer==null){buffer=appendBuffer(firs56,las8 )}
-        //else{buffer+=appendBuffer(firs56,las8 )}
-        //buffer.push(appendBuffer(firs56,las8 ))
-        //console.log(buffer)
+        var las8 = objtipetoByte("sphere", obj.dim,obj.timeout,obj.mass)
         var tmp = appendBuffer(firs56, las8)
         buffer = appendBuffer(buffer, tmp)
-        // 
     }
-    console.log(buffer)
-    sendbytts(buffer)
     //console.log(buffer)
+    sendbytts(buffer)
 }
 
 function appendBuffer(buffer1, buffer2) {
@@ -682,35 +614,32 @@ function makebullete(objs) {
     function createBoxFF(objj) {
         var box_geometry = new THREE.SphereGeometry(objj.r, 8, 8)
         var box, material;
-        material = Physijs.createMaterial(
-            new THREE.MeshPhongMaterial({ specular: 0xffffff, flatShading: true, vertexColors: THREE.VertexColors }),
-            .95, // medium friction
-            .3 // low restitution
-        );
+        material = Physijs.createMaterial( new THREE.MeshPhongMaterial({ specular: 0xffffff, flatShading: true, vertexColors: THREE.VertexColors }),.95, .3  );
         box = new Physijs.SphereMesh(box_geometry, material);
 
         box.position.x = objj.pos.x;
         box.position.y = objj.pos.y;
         box.position.z = objj.pos.z;
-        box.mass = 100;
-        box.dealDamage = true;
+        box.mass = objj.mas;
+        box.notmine=true;
+        //box.dealDamage = true;
         box.castShadow = true;
-        box.uuid=objj.id
-        setTimeout(removebullett.bind(null, box), 1000);
-        function removebullett(box) { /*console.log(box);*/ scene.remove(box); }
+        box.uuid = objj.id
+        setTimeout(removebullett.bind(null, box), objj.tim);
+        function removebullett(box) {scene.remove(box); }
 
         scene.add(box);
-        box.setLinearVelocity(new THREE.Vector3(objj.vel.x,objj.vel.y,objj.vel.z))
+        box.setLinearVelocity(new THREE.Vector3(objj.vel.x, objj.vel.y, objj.vel.z))
     };
 }
 
-function removeFromSceneById(id){
+function removeFromSceneById(id) {
     let obj = trackedObjects[id];
-    if(obj==null){console.log("null");return}
-    for (uuid in trackedObjects){
-        if (uuid==id){console.log("vyicgbudhonij")}
+    if (obj == null) { console.log("null"); return }
+    for (uuid in trackedObjects) {
+        if (uuid == id) { console.log("vyicgbudhonij") }
     }
     try {
         scene.remove(obj.self)
-    }catch(err){console.log(err)}
+    } catch (err) { console.log(err) }
 }
