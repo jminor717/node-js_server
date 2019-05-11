@@ -35,39 +35,73 @@ const wss = new WebSocket.Server({
 var scene = null;
 var clients = [], updates = [], clientId = 1;
 wss.on("connection", function (socket) {
-    var ismaster=false;
-    if(clients.length==0){
-        ismaster=true
+    var ismaster = false;
+    var craftuuid = 0;
+    if (clients.length == 0) {
+        ismaster = true
     }
-    clients.push({ socket: socket, id: clientId, lastUpdate: new Date().getTime(),master:ismaster });
-    var self = { socket: socket, id: clientId, lastUpdate: new Date().getTime(),master:ismaster };
+    if (!hasmaster()) {
+        console.log("creat master id: " + clientId + " ||craft uuid: " + craftuuid + " ||at " + new Date())
+        ismaster = true
+        socket.send(JSON.stringify({ task: "elect", master: ismaster }))
+    }
+    clients.push({ socket: socket, id: clientId, lastUpdate: new Date().getTime(), master: ismaster });
+    var self = { socket: socket, id: clientId, lastUpdate: new Date().getTime(), master: ismaster };
     clientId++;
+
+    cont = 0
+    clients.forEach(client => {
+        if (client.master) { cont++ }
+    })
+    //console.log("game has "+cont+" masters")
     socket.on('event', data => { console.log(data) });
     socket.on("message", data => {
         try {
             data = JSON.parse(data)
             if (data.task == "getobjects") {
-                socket.send(JSON.stringify({ task: "create", data: scene }))
+                socket.send(JSON.stringify({ "task": "create", "data": scene }))
                 self.lastUpdate = new Date().getTime()
             }
             if (data.task == "setscene") {
                 scene = data.data;
+                for (uu in scene) {
+                    if (scene[uu].tipe == "craft") {
+                        //console.log(uu,scene[uu])
+                        if (scene[uu].me) {
+                            craftuuid = uu
+                        }
+                    }
+                }
                 //for (id in scene){
-                    //console.log(id)
+                //console.log(id)
                 //}
             }
-            if (data.task == "uda") {
+            if (data.task == "addcraft") {
+                //console.log(" new player #################3");
+                scene[data.data.uuid] = data.data;
+                if (scene[data.data.uuid].me) {
+                    craftuuid = data.data.uuid
+                }
+                //console.log(scene[data.data.uuid]);
+                clients.forEach(other => {
+                    if (other.id != self.id) {
+                        other.socket.send(JSON.stringify({ "task": "addcraft", "data": data.data }))
+                        //console.log("new player to "+other.id);
+                    }
+                });
+                //console.log("#################3 new player");
+                //sendtoother(self,JSON.stringify({ "task": "addcraft", "data": data.data }))
                 //scene[data.data.uuid]=data.data;
                 //updates.push({updates:data.data,sentTo:1,time:new Date().getTime(),from:self.id})
             }
         } catch (err) {
             socket.binaryType = 'arraybuffer';
-            sendtoother(self,data)
+            sendtoother(self, data)
             if (data.byteLength == 4) {
                 var idds = new Uint32Array(data)
                 //console.log(idds[0])
-                scene[idds[0]] = null
-               // updates.push({ remove: data ,sentTo: 1, time: new Date().getTime(), from: self.id})
+                scene[idds[0]] = undefined
+                // updates.push({ remove: data ,sentTo: 1, time: new Date().getTime(), from: self.id})
             } else if (data.byteLength % 64 == 0) {
                 //total=data.byteLength/64
                 //var objs=parse.frombytesgroupnode(data)
@@ -76,7 +110,7 @@ wss.on("connection", function (socket) {
                 //console.log( data)
                 var datas = parse.frombytesnode(data)
                 // updates.push({ updates: data, sentTo: 1, time: new Date().getTime(), from: self.id })
-                if(scene==null){return}
+                if (scene == null) { return }
                 if (scene[datas.id] == null) {
                     scene[datas.id] = {
                         vel: datas.vel,
@@ -101,36 +135,46 @@ wss.on("connection", function (socket) {
             }
         }
     });
-    socket.on('close', ()=>{
-        
-        for (num in clients){
-            if (clients[num].id == self.id){
-                clients.splice(num,1);
-                console.log('websocket closed '+self.id+" avalable "+clients)
-                if (!hasmaster()&&clients.length!=0){
-                    //console.log("master")
+    socket.on('close', () => {
+        for (num in clients) {
+            if (clients[num].id == self.id) {
+                clients.splice(num, 1);
+                //console.log('websocket closed '+self.id+" avalable "+clients)
+                if (!hasmaster() && clients.length != 0) {
+                    console.log("elect master id: " + clientId + " ||craft uuid: " + craftuuid + " ||at " + new Date())
+                    clients[0].master = true;
                     clients[0].socket.send(JSON.stringify({ task: "elect", master: true }))
                 }
+                buffer = new ArrayBuffer(4);
+                var tmp = new Uint32Array(buffer);
+                tmp[0] = craftuuid;
+                console.log("close conect id: " + self.id + " ||craft uuid: " + tmp + " ||at " + new Date())
+                clients.forEach(client => {
+                    client.socket.send(buffer)
+                })
+
             }
+
         }
+        scene[craftuuid] = undefined
     });
 
 })
 
-function hasmaster(){
-    var isi =false;
-    for (oi in clients){
-        if (clients[oi].master){
-            isi =true;
+function hasmaster() {
+    var isi = false;
+    for (oi in clients) {
+        if (clients[oi].master) {
+            isi = true;
         }
     }
     return isi;
 }
 
 
-function sendtoother(from,data){
-    clients.forEach(other =>{
-        if (other.id!=from.id){
+function sendtoother(from, data) {
+    clients.forEach(other => {
+        if (other.id != from.id) {
             other.socket.send(data)
         }
     })
@@ -143,7 +187,7 @@ const school = require('./school/school.js')
 /* serves main page */
 app.get("/", function (req, res) {
     //console.log('static file request : ' + JSON.stringify(req.params));
-    res.sendFile(__dirname +'/index.htm')
+    res.sendFile(__dirname + '/index.htm')
 });
 
 app.post("/user/add", function (req, res) {

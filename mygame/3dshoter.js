@@ -59,15 +59,15 @@ var moveRight = false;
 var up = false;
 var down = false;
 var canJump = false;
-var myBmaterial=Physijs.createMaterial(new THREE.MeshPhongMaterial({ specular: 0xffffff, flatShading: true, vertexColors: THREE.VertexColors }), 0.6, 0.3);
-var otherBmaterial=Physijs.createMaterial(new THREE.MeshPhongMaterial({ specular: 0xffffff, flatShading: true, vertexColors: THREE.VertexColors }), 0.6, 0.3);
+var myBmaterial = Physijs.createMaterial(new THREE.MeshPhongMaterial({ specular: 0xffffff, flatShading: true, vertexColors: THREE.VertexColors }), 0.6, 0.3);
+var otherBmaterial = Physijs.createMaterial(new THREE.MeshPhongMaterial({ specular: 0xffffff, flatShading: true, vertexColors: THREE.VertexColors }), 0.6, 0.3);
 
 var prevTime = performance.now();
 var velocity = new THREE.Vector3();
 var direction = new THREE.Vector3();
 
 
-function staticinit() {
+function staticinit(objs) {
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 1, 1000);
     scene = new Physijs.Scene;
     scene.background = new THREE.Color(0xffffff);
@@ -77,49 +77,54 @@ function staticinit() {
     scene.add(light);
 
     var craftgeom = new THREE.BoxGeometry(5, 5, 5);
-    var material;
-    material = Physijs.createMaterial(
-        new THREE.MeshPhongMaterial({ specular: 0xffffff, flatShading: true, vertexColors: THREE.VertexColors }),
-        //new THREE.MeshLambertMaterial({ map: loader.load('images/plywood.jpg') }),
-        .6, // medium friction
-        .3 // low restitution
-    );
-    craft = new Physijs.BoxMesh(
-        craftgeom,
-        material
-    );
-    craft.collisions = 0;
+    var material = Physijs.createMaterial( new THREE.MeshPhongMaterial({ specular: 0xffffff, flatShading: true, vertexColors: THREE.VertexColors }), 0.6, 0.3);
+    craft = new Physijs.BoxMesh(craftgeom, material);
 
-    craft.rotation.set(
-        Math.random() * Math.PI,
-        Math.random() * Math.PI,
-        Math.random() * Math.PI
-    );
+    craft.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
     craft.castShadow = true;
+
     handleCollision = function (collided_with, linearVelocity, angularVelocity) {
         //console.log("craft")
         //console.log(collided_with)
     }
+
     craft.addEventListener('collision', handleCollision);
     console.log("craft")
     console.log(craft)
-    //craft.__dirtyPosition = true;
-    //craft.__dirtyVelocity = true;
-    //craft.__dirtyRotation = true;
+
     craft.setLinearVelocity(new THREE.Vector3(0, 0, 0))
-    craft.position.set(Math.floor(Math.random() * 20 - 10) * 20, Math.floor(Math.random() * 20 - 10) * 20, Math.floor(Math.random() * 20 - 10) * 20)
-    //camera.position.set(0, 10, 10)
+    craft.position.set(Math.floor(Math.random() * 20 - 10) * 20, Math.floor(Math.random() * 20) * 20 + 10, Math.floor(Math.random() * 20 - 10) * 20)
     craft.add(camera);
-    //trackedObjects.push({
-    //   type: "craft",
-    //    vel: craft._physijs.linearVelocity,
-    //    pos: craft.position
-    // })
+
+    var o = new Uint32Array(1);
+    window.crypto.getRandomValues(o)
+    craft.uuid = o[0]
     console.log(craft)
 
     controls = new THREE.PointerLockControls(craft);
     //scene.add(controls.getObject());
     scene.add(craft);
+
+    let crft = {
+        tipe: "craft",
+        vel: craft._physijs.linearVelocity,
+        pos: craft.position,
+        rot: craft.rotation,
+        rotvel: craft._physijs.angularVelocity,
+        uuid: craft.uuid,
+        helt: craft.health,
+        self: craft,
+        me:true
+    };
+    trackedObjects[craft.uuid] = crft
+
+    if (objs != null) {
+        connection.send(JSON.stringify({ "task": "addcraft", "data": crft }))
+        //connection.send(arraybuffer)
+        console.log("not master soidvjbeo")
+        //addCraftTscene(crft)
+    }
+
     console.log(controls.getcamera())
     function wallll() {
         var floorGeometry = new THREE.BoxGeometry(1000, 1, 1000);
@@ -144,64 +149,48 @@ function staticinit() {
         .8, // high friction
         .3 // low restitution
     );
-    ground = new Physijs.BoxMesh(
-        wallll(),
-        ground_material,
-        0 // mass
-    );
+
+    ground = new Physijs.BoxMesh( wallll(), ground_material, 0  );
     ground.receiveShadow = true;
     scene.add(ground);
-    ground = new Physijs.BoxMesh(
-        new THREE.BoxGeometry(1000, 1, 1000),
-        ground_material,
-        0 // mass
-    );
+
+    ground = new Physijs.BoxMesh( new THREE.BoxGeometry(1000, 1, 1000), ground_material,  0  );
     ground.receiveShadow = true;
     ground.position.y = 400;
     scene.add(ground);
-    celing = new Physijs.BoxMesh(
-        new THREE.BoxGeometry(1, 1000, 1000),
-        ground_material,
-        0 // mass
-    );
+
+    celing = new Physijs.BoxMesh( new THREE.BoxGeometry(1, 1000, 1000), ground_material,  0 );
     celing.receiveShadow = true;
     celing.position.x = 400
     scene.add(celing);
-    celing = new Physijs.BoxMesh(
-        new THREE.BoxGeometry(1, 1000, 1000),
-        ground_material,
-        0 // mass
-    );
+
+    celing = new Physijs.BoxMesh( new THREE.BoxGeometry(1, 1000, 1000), ground_material, 0 );
     celing.receiveShadow = true;
     celing.position.x = -400
     scene.add(celing);
-    celing = new Physijs.BoxMesh(
-        new THREE.BoxGeometry(1000, 1000, 1),
-        ground_material,
-        0 // mass
-    );
+
+    celing = new Physijs.BoxMesh( new THREE.BoxGeometry(1000, 1000, 1), ground_material, 0 );
     celing.receiveShadow = true;
     celing.position.z = 400
     scene.add(celing);
-    celing = new Physijs.BoxMesh(
-        new THREE.BoxGeometry(1000, 1000, 1),
-        ground_material,
+
+    celing = new Physijs.BoxMesh( new THREE.BoxGeometry(1000, 1000, 1), ground_material,
         0 // mass
     );
     celing.receiveShadow = true;
     celing.position.z = -400
     scene.add(celing);
-
+    //console.log(scene.children)
 }
 
 function init2(objs) {
-    staticinit()
+    staticinit(objs)
     var box_geometry_target = new THREE.BoxGeometry(20, 20, 20)
     handleCollisiontarget = function (collided_with, linearVelocity, angularVelocity, contact_normal) {
         if (collided_with.dealDamage === true) {
             var dif = (this._physijs.linearVelocity.clone().add(linearVelocity.clone())).length()
             this.health -= ((dif) / (this._physijs.mass / collided_with._physijs.mass));
-            if (Math.round(box.health) != Math.round(box.startingHealth)) {
+            if (Math.round(this.health) != Math.round(this.startingHealth)) {
                 switch (Math.round(((this.health / this.startingHealth) * 6))) {
                     case 1: this.material.color.setHex(0xcc8855); break;
                     case 2: this.material.color.setHex(0xbb9955); break;
@@ -212,6 +201,10 @@ function init2(objs) {
                 }
             }
         }
+        //console.log(collided_with._physijs.linearVelocity)
+        //console.log(linearVelocity)
+        //console.log(this._physijs.linearVelocity)
+        this.recentcolosion = true
         if (this.health < 0) {
             removefromscene(this);
             scene.remove(this);
@@ -263,7 +256,7 @@ function init2(objs) {
         if (vel != null) { box.setLinearVelocity(vel) }
         if (rotvel != null) { box.setAngularVelocity(rotvel) }
         trackedObjects[box.uuid] = {
-            type: "BoxGeometry",
+            tipe: "BoxGeometry",
             vel: box._physijs.linearVelocity,
             pos: box.position,
             rot: box.rotation,
@@ -273,22 +266,24 @@ function init2(objs) {
             self: box
         }
     }
+    //console.log("ervfuysagdibuhnoicjiadnovhbybu")
     if (objs == null) {
         for (var i = 0; i < 100; i++) {
             createBoxtarget(100, null, null, null, null, null)
         }
-        doneinit();
+        start();
     } else {
-        //console.log(Object.keys(objs).length)
+        console.log(Object.keys(objs).length)
         for (bock in objs) {
             var bocks = objs[bock]
             if (bocks == null) { console.log(bock); continue; }
-            if (bocks.type != "craft") {
-                if (bocks.type == "BoxGeometry") {
-                    //console.log(bocks.uuid)
-                    createBoxtarget(bocks.helt + 0.1, bocks.pos, bocks.vel, bocks.rot, bocks.rotvel, bocks.uuid)
-                }
+            if (bocks.tipe == "BoxGeometry") {
+                createBoxtarget(bocks.helt + 0.1, bocks.pos, bocks.vel, bocks.rot, bocks.rotvel, bocks.uuid)
+            }else if(bocks.tipe == "craft"){
+                addcraft(bocks)
+                console.log("############other craftr")
             }
+
         }
     }
 
@@ -300,14 +295,18 @@ function init2(objs) {
     window.addEventListener('resize', onWindowResize, false);
     document.addEventListener('mousedown', onDocumentmousedown, false);
     mouse = new THREE.Vector2();
-
+    console.log("is master " + master)
+    //console.log(scene.children)
 }///////////innit   ************************************************************************************************************#################################
 
 function createscene(obj) {
     console.log("create scene")
     if (obj == null) {
         master = true;
-    }
+        console.log("scnen null is master")
+    }//else {
+    //    master = false;
+    //}
     init2(obj)
     animate()
 }
@@ -320,7 +319,9 @@ function updateobj(update) {
         // console.log(update)
         return;
     }
+    //console.log(update)
     let that = obj.self;
+    //console.log(that)
     that.__dirtyPosition = true;
     that.position.x = update.pos.x
     that.position.y = update.pos.y
@@ -342,11 +343,11 @@ function updateobj(update) {
         case 6: that.material.color.setHex(0x77dd55); break;
     }
 }
-
+/*
 function updatescene(objs) {
     console.log(objs)
-    for (key in objs){
-        update=objs[key]
+    for (key in objs) {
+        update = objs[key]
         let obj = trackedObjects[update.uuid];
         //console.log(obj)
         let that = obj.self;
@@ -378,6 +379,51 @@ function updatescene(objs) {
         }
     }
 }
+*/
+
+
+
+function addcraft(coft) {
+    //console.log(coft)
+    var craftgeom = new THREE.BoxGeometry(5, 5, 5);
+    var material = Physijs.createMaterial(new THREE.MeshPhongMaterial({ specular: 0xffffff, flatShading: true, vertexColors: THREE.VertexColors }), 0.6, 0.3);
+    var othercraft = new Physijs.BoxMesh(craftgeom, material);
+
+    othercraft.rotation.set(coft.rot._x, coft.rot._y, coft.rot._z);
+    othercraft.castShadow = true;
+    /*
+    handleCollision = function (collided_with, linearVelocity, angularVelocity) {
+        //console.log("craft")
+        //console.log(collided_with)
+    }
+    //coft.helt
+    othercraft.addEventListener('collision', handleCollision);
+*/
+
+    othercraft.setLinearVelocity(new THREE.Vector3(coft.vel.x, coft.vel.y, coft.vel.z))
+    othercraft.position.set(coft.pos.x, coft.pos.y, coft.pos.z)
+
+    othercraft.uuid = coft.uuid
+    console.log("new craft "+othercraft)
+    //console.log(othercraft)
+
+    scene.add(othercraft);
+
+    trackedObjects[othercraft.uuid] = {
+        tipe: "craft",
+        vel: othercraft._physijs.linearVelocity,
+        pos: othercraft.position,
+        rot: othercraft.rotation,
+        rotvel: othercraft._physijs.angularVelocity,
+        uuid: othercraft.uuid,
+        helt: othercraft.health,
+        self: othercraft,
+        me: false
+    }
+    //trackedObjects[obj.data.uuid].self = othercraft;
+
+}
+
 
 function onWindowResize() {
     camera.aspect = window.innerWidth / window.innerHeight;
@@ -388,18 +434,18 @@ function onWindowResize() {
 
 function onDocumentmousedown(event) {
     //console.log(event.button,event.button,event.timeStamp)
-    if (event.button == 0) { single(400000, 400, event,400) }
-    if (event.button == 1) { grenade(250000, 50, event,150) }
-    if (event.button == 2) { shotgun(400000, 200, 10, event,250) }
+    if (event.button == 0) { single(400000, 400, event, 400) }
+    if (event.button == 1) { grenade(250000, 50, event, 150) }
+    if (event.button == 2) { shotgun(400000, 200, 10, event, 250) }
     for (obj in scene.children) {
         // console.log(scene.children[obj].uuid)
     }
 }
 
 
-function grenade(total, speed, event,range) {
+function grenade(total, speed, event, range) {
     event.preventDefault();
-    time=(range/speed)*1000
+    time = (range / speed) * 1000
     handleCollision = function (collided_with, linearVelocity, angularVelocity) {
         scene.remove(this);
         explosion(this.position, 100, this.mass);
@@ -423,7 +469,7 @@ function grenade(total, speed, event,range) {
     vel.add(cvel)
     var ofset = diree.clone().normalize().multiplyScalar(10)
     var position = new THREE.Vector3(craft.position.x + ofset.x, craft.position.y + ofset.y, craft.position.z + ofset.z)
-    var bbx = makeprojectile(position, vel, (total / speed), null, box_geometry, myBmaterial, 5,time)
+    var bbx = makeprojectile(position, vel, (total / speed), null, box_geometry, myBmaterial, 5, time)
     boxes.push(bbx);
     maketransit(boxes)
     bbx.addEventListener('collision', handleCollision);
@@ -431,7 +477,7 @@ function grenade(total, speed, event,range) {
 }
 
 function explosion(positionor, numobjects, totalmass) {
-    time=(200/400)*1000
+    time = (200 / 400) * 1000
     let boxes = []
     var box_geometry = new THREE.SphereGeometry(.5, 8, 8)
     //var material = Physijs.createMaterial(new THREE.MeshPhongMaterial({ specular: 0xffffff, flatShading: true, vertexColors: THREE.VertexColors }), .95, .3);
@@ -440,7 +486,7 @@ function explosion(positionor, numobjects, totalmass) {
         var ofset = new THREE.Vector3((Math.random() * 10) - 5, (Math.random() * 10) - 5, (Math.random() * 10) - 5)
         var position = new THREE.Vector3(positionor.x + ofset.x, positionor.y + ofset.y, positionor.z + ofset.z)
         //velocity = new THREE.Vector3((Math.random() * 800) - 400, (Math.random() * 800) - 400, (Math.random() * 800) - 400);
-        let velocity=position.clone().sub(positionor).normalize().multiplyScalar(400)
+        let velocity = position.clone().sub(positionor).normalize().multiplyScalar(400)
         ////////////////#################################////////////////#################################////////////////#################################
         box = new Physijs.SphereMesh(box_geometry, myBmaterial);
         box.dealDamage = true;
@@ -451,7 +497,7 @@ function explosion(positionor, numobjects, totalmass) {
         box.position.z = position.z;
         box.dim = { r: .5 };
         box.vel = velocity;
-        box.timeout=time
+        box.timeout = time
 
         var o = new Uint32Array(1);
         window.crypto.getRandomValues(o);
@@ -464,11 +510,11 @@ function explosion(positionor, numobjects, totalmass) {
     }
     maketransit(boxes)
     setTimeout(removebullett.bind(null, boxes), time);
-    function removebullett(boxes) {  for (key in boxes){ scene.remove(boxes[key]) } }
+    function removebullett(boxes) { for (key in boxes) { scene.remove(boxes[key]) } }
 }
 
-function shotgun(total, speed, pelets, event,range) {
-    time=(range/speed)*1000
+function shotgun(total, speed, pelets, event, range) {
+    time = (range / speed) * 1000
     event.preventDefault();
     var diree = getdirection()
     var box_geometry = new THREE.SphereGeometry(.5, 8, 8)
@@ -480,16 +526,16 @@ function shotgun(total, speed, pelets, event,range) {
         var position = new THREE.Vector3(craft.position.x + ofset.x, craft.position.y + ofset.y, craft.position.z + ofset.z)
         vel = diree.clone().normalize().multiplyScalar(speed).add(new THREE.Vector3((Math.random() * 50) - 25, (Math.random() * 50) - 25, (Math.random() * 50) - 25))
         vel.add(cvel)
-        boxes.push(makeprojectile(position, vel, ((total / pelets) / speed), null, box_geometry, myBmaterial, 0.5,time));
+        boxes.push(makeprojectile(position, vel, ((total / pelets) / speed), null, box_geometry, myBmaterial, 0.5, time));
 
     }
     maketransit(boxes)
     setTimeout(removebullett.bind(null, boxes), time);
-    function removebullett(boxes) {  for (key in boxes){ scene.remove(boxes[key]) } }
+    function removebullett(boxes) { for (key in boxes) { scene.remove(boxes[key]) } }
 }
 
-function single(total, speed, event,range) {
-    time=(range/speed)*1000
+function single(total, speed, event, range) {
+    time = (range / speed) * 1000
     event.preventDefault();
     boxes = [];
     var diree = getdirection()
@@ -500,12 +546,12 @@ function single(total, speed, event,range) {
     vel.add(cvel)
     var ofset = diree.clone().normalize().multiplyScalar(10)
     var position = new THREE.Vector3(craft.position.x + ofset.x, craft.position.y + ofset.y, craft.position.z + ofset.z)
-    boxes.push(makeprojectile(position, vel, (total / speed), time, box_geometry, myBmaterial, 2,time));
+    boxes.push(makeprojectile(position, vel, (total / speed), time, box_geometry, myBmaterial, 2, time));
     maketransit(boxes)
 }
 
 
-function makeprojectile(position, velocity, mass, time, geomitty, material, radius,timeout) {
+function makeprojectile(position, velocity, mass, time, geomitty, material, radius, timeout) {
     box = new Physijs.SphereMesh(geomitty, material);
     box.dealDamage = true;
     box.castShadow = true;
@@ -515,7 +561,7 @@ function makeprojectile(position, velocity, mass, time, geomitty, material, radi
     box.position.z = position.z;
     box.dim = { r: radius };
     box.vel = velocity;
-    box.timeout=timeout
+    box.timeout = timeout
     if (time != null) {
         setTimeout(removebullett.bind(null, box), time);
         function removebullett(box) { /*console.log(box);*/ scene.remove(box); }
@@ -541,59 +587,73 @@ function getdirection() {
 
 function animate() {
     requestAnimationFrame(animate);
-
+    mat = new THREE.Matrix4().makeScale(.975, .975, .975)
     for (uuid in trackedObjects) {
         let obj = trackedObjects[uuid];
+        
+        if(obj.tipe==="craft"){
+            if (obj.me){
+                if (controlsEnabled === true) {
+                    
+                    velocity = obj.self._physijs.linearVelocity
+            
+                    var tmpmove = new THREE.Vector3(0, 0, 0);
+                    if (moveForward) tmpmove.z = 1;
+                    if (moveBackward) tmpmove.z = -1;
+            
+                    if (moveRight) tmpmove.x = -0.5;
+                    if (moveLeft) tmpmove.x = 0.5;
+            
+                    if (up) tmpmove.y = -0.5;
+                    if (down) tmpmove.y = 0.5;
+                    obj.self.__dirtyPosition = true;
+                    obj.self.__dirtyVelocity = true;
+                    obj.self.__dirtyRotation = true;
+                    if (stopnow) {
+                        var m41 = new THREE.Matrix4();
+                        if (velocity.length() < 2) {//if the craft speed is below this use a scale to slow it to a stop
+                            m41.makeScale(.9, .9, .9);
+                            velocity.applyMatrix4(m41);
+                        } else {
+                            if (velocity.x < 0) velocity.x += .5; else velocity.x += -.5;
+                            if (velocity.y < 0) velocity.y += .5; else velocity.y += -.5;
+                            if (velocity.z < 0) velocity.z += 1; else velocity.z += -1;
+                        }
+                    }
+            
+                    obj.self.rotation.setFromQuaternion(controls.getObject().quaternion)
+                    tmpmove.applyQuaternion(obj.self.quaternion);
+                    velocity.x -= tmpmove.x;
+                    velocity.z -= tmpmove.z;
+                    velocity.y -= tmpmove.y;
+            
+                    obj.self.setLinearVelocity(velocity)
+                    controls.updateRotationVector();
+                    updatebyUUid(obj.self, "craft")
+                }
+            }
+            //console.log(obj.tipe);
+            continue;
+        }
         let vel = obj.self._physijs.linearVelocity;
         let rotvel = obj.self._physijs.angularVelocity;
-        mat = new THREE.Matrix4().makeScale(.975, .975, .975)
         vel.applyMatrix4(mat);
         rotvel.applyMatrix4(mat);
         obj.self.setLinearVelocity(vel);
         obj.self.setAngularVelocity(rotvel)
-        if (vel.length() > 1||rotvel.length() > 1) {
+        if (vel.length() > 1 || rotvel.length() > 1) {
+
             //obj.self.setLinearVelocity(new THREE.Vector3(0, 0, 0))
             if (master) {
+                updatebyUUid(obj.self, "BoxGeometry")
+            } else if (obj.recentcolosion == true) {
+                obj.recentcolosion = false
+                console.log(vel)
                 updatebyUUid(obj.self, "BoxGeometry")
             }
         }
     }
-    if (controlsEnabled === true) {
-        velocity = craft._physijs.linearVelocity
-
-        var tmpmove = new THREE.Vector3(0, 0, 0);
-        if (moveForward) tmpmove.z = 1;
-        if (moveBackward) tmpmove.z = -1;
-
-        if (moveRight) tmpmove.x = -0.5;
-        if (moveLeft) tmpmove.x = 0.5;
-
-        if (up) tmpmove.y = -0.5;
-        if (down) tmpmove.y = 0.5;
-        craft.__dirtyPosition = true;
-        craft.__dirtyVelocity = true;
-        craft.__dirtyRotation = true;
-        if (stopnow) {
-            var m41 = new THREE.Matrix4();
-            if (velocity.length() < 2) {//if the craft speed is below this use a scale to slow it to a stop
-                m41.makeScale(.9, .9, .9);
-                velocity.applyMatrix4(m41);
-            } else {
-                if (velocity.x < 0) velocity.x += .5; else velocity.x += -.5;
-                if (velocity.y < 0) velocity.y += .5; else velocity.y += -.5;
-                if (velocity.z < 0) velocity.z += 1; else velocity.z += -1;
-            }
-        }
-
-        craft.rotation.setFromQuaternion(controls.getObject().quaternion)
-        tmpmove.applyQuaternion(craft.quaternion);
-        velocity.x -= tmpmove.x;
-        velocity.z -= tmpmove.z;
-        velocity.y -= tmpmove.y;
-
-        craft.setLinearVelocity(velocity)
-        controls.updateRotationVector();
-    }
+    
     scene.simulate();
     renderer.render(scene, camera);
 }
@@ -607,26 +667,26 @@ function maketransit(objs = []) {
         var las16 = objtipetoByte("sphere", obj.dim, obj.timeout, obj.mass)
         //var tmp = appendBuffer(firs56, las16)
         //buffer = appendBuffer(buffer, tmp)
-/*
-                var las16 = new ArrayBuffer(16)
-                var tmp = new Uint32Array(buffer)
-                tmp[0] = 2;
-                tmp[2] = obj.timeout;
-                tmp[3] = obj.mass;
-                tmp = new Float32Array(buffer);
-                tmp[1] = obj.dim.r;
+        /*
+                        var las16 = new ArrayBuffer(16)
+                        var tmp = new Uint32Array(buffer)
+                        tmp[0] = 2;
+                        tmp[2] = obj.timeout;
+                        tmp[3] = obj.mass;
+                        tmp = new Float32Array(buffer);
+                        tmp[1] = obj.dim.r;
+                //*/
+        var tmp = new Uint8Array(firs56.byteLength + las16.byteLength);
+        tmp.set(new Uint8Array(firs56), 0);
+        tmp.set(new Uint8Array(las16), firs56.byteLength);
+        var tmp2 = new Uint8Array(buffer.byteLength + tmp.buffer.byteLength);
+        tmp2.set(new Uint8Array(buffer), 0);
+        tmp2.set(new Uint8Array(tmp.buffer), buffer.byteLength);
+
+        buffer = tmp2.buffer
         //*/
-                var tmp = new Uint8Array(firs56.byteLength + las16.byteLength);
-                tmp.set(new Uint8Array(firs56), 0);
-                tmp.set(new Uint8Array(las16), firs56.byteLength);
-                var tmp2 = new Uint8Array(buffer.byteLength + tmp.buffer.byteLength);
-                tmp2.set(new Uint8Array(buffer), 0);
-                tmp2.set(new Uint8Array(tmp.buffer), buffer.byteLength);
-        
-                buffer= tmp2.buffer
-            //*/
-            }
-            connection.send(buffer)
+    }
+    connection.send(buffer)
     //sendbytts(buffer)
 }
 
@@ -638,9 +698,10 @@ function appendBuffer(buffer1, buffer2) {
 };
 
 function makebullete(objs) {
-    boxes=[];
+    boxes = [];
     for (id in objs) {
         objj = objs[id];
+        //console.log(objj)
         var box_geometry = new THREE.SphereGeometry(objj.r, 8, 8)
         //var material = Physijs.createMaterial( new THREE.MeshPhongMaterial({ specular: 0xffffff, flatShading: true, vertexColors: THREE.VertexColors }),.95, .3  );
         var box = new Physijs.SphereMesh(box_geometry, otherBmaterial);
@@ -649,8 +710,8 @@ function makebullete(objs) {
         box.position.y = objj.pos.y;
         box.position.z = objj.pos.z;
         box.mass = objj.mas;
-        box.notmine=true;
-        if(master){
+        box.notmine = true;
+        if (master) {
             box.dealDamage = true;
         }
         box.castShadow = true;
@@ -662,13 +723,21 @@ function makebullete(objs) {
         box.setLinearVelocity(new THREE.Vector3(objj.vel.x, objj.vel.y, objj.vel.z))
         boxes.push(box)
     }
-    setTimeout(removebullett.bind(null, boxes), time);
-    function removebullett(boxes) {  for (key in boxes){ scene.remove(boxes[key]) } }
+    setTimeout(removebullett.bind(null, boxes), objj.tim);
+    function removebullett(boxes) { for (key in boxes) { scene.remove(boxes[key]) } }
+    try {
+
+    } catch (err) {
+        console.log(boxes)
+    }
+
 }
 
 function removeFromSceneById(id) {
+    console.log("rm -uuid "+id)
     let obj = trackedObjects[id];
-    if (obj == null) { console.log("null"); return }
+    //console.log(obj)
+    if (obj == null) { console.log("trying to remove null object"); return }
     try {
         scene.remove(obj.self)
     } catch (err) { console.log(err) }
