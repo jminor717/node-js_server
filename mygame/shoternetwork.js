@@ -35,12 +35,16 @@ connection.onmessage = function (data) {
         if(obj.task=="uda"){
             updatescene(obj.data)
         }
+        if(obj.task=="elect"){
+            console.log("will become master "+obj.master)
+            master=obj.master
+        }
     }catch(err){
         connection.binaryType = 'arraybuffer';
         //console.log(data.data)
         if(data.data.byteLength==4){
             var idds= new Uint32Array(data.data)
-            console.log(idds[0])
+            //console.log(idds[0])
             removeFromSceneById(idds[0])
         }else if(data.data.byteLength % 72 == 0){
             makebullete(frombytesgroup(data.data))
@@ -62,7 +66,7 @@ function removefromscene(obj){
     var buf=new ArrayBuffer(4)
     var arr= new Uint32Array(buf)
     arr[0]=obj.uuid;
-    console.log(arr[0],obj.uuid)
+    //console.log(arr[0],obj.uuid)
     connection.send(buf)
 }
 

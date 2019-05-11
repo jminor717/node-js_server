@@ -35,9 +35,12 @@ const wss = new WebSocket.Server({
 var scene = null;
 var clients = [], updates = [], clientId = 1;
 wss.on("connection", function (socket) {
-
-    clients.push({ socket: socket, id: clientId, lastUpdate: new Date().getTime() })
-    var self = { socket: socket, id: clientId, lastUpdate: new Date().getTime() };
+    var ismaster=false;
+    if(clients.length==0){
+        ismaster=true
+    }
+    clients.push({ socket: socket, id: clientId, lastUpdate: new Date().getTime(),master:ismaster });
+    var self = { socket: socket, id: clientId, lastUpdate: new Date().getTime(),master:ismaster };
     clientId++;
     socket.on('event', data => { console.log(data) });
     socket.on("message", data => {
@@ -59,19 +62,21 @@ wss.on("connection", function (socket) {
             }
         } catch (err) {
             socket.binaryType = 'arraybuffer';
+            sendtoother(self,data)
             if (data.byteLength == 4) {
                 var idds = new Uint32Array(data)
                 //console.log(idds[0])
                 scene[idds[0]] = null
-                updates.push({ remove: data ,sentTo: 1, time: new Date().getTime(), from: self.id})
+               // updates.push({ remove: data ,sentTo: 1, time: new Date().getTime(), from: self.id})
             } else if (data.byteLength % 64 == 0) {
                 //total=data.byteLength/64
                 //var objs=parse.frombytesgroupnode(data)
-                updates.push({ updates: data, sentTo: 1, time: new Date().getTime(), from: self.id, bullett: true })
+                //updates.push({ updates: data, sentTo: 1, time: new Date().getTime(), from: self.id, bullett: true })
             } else {
                 //console.log( data)
                 var datas = parse.frombytesnode(data)
-                updates.push({ updates: data, sentTo: 1, time: new Date().getTime(), from: self.id })
+                // updates.push({ updates: data, sentTo: 1, time: new Date().getTime(), from: self.id })
+                if(scene==null){return}
                 if (scene[datas.id] == null) {
                     scene[datas.id] = {
                         vel: datas.vel,
@@ -96,44 +101,40 @@ wss.on("connection", function (socket) {
             }
         }
     });
-    setInterval(() => {
-
-        let requiredupdates = getupdates(self)
-        if (requiredupdates.length == 0) { return; }
-        //console.log(requiredupdates,self.id)
-        requiredupdates.forEach(uda => {
-            socket.binaryType = 'arraybuffer';
-            if ("bullett" in uda) {
-                socket.send(uda.updates)
-            } else if ("remove" in uda) {
-                socket.send(uda.remove)
-            } else { 
-                socket.send(uda.updates)
+    socket.on('close', ()=>{
+        
+        for (num in clients){
+            if (clients[num].id == self.id){
+                clients.splice(num,1);
+                console.log('websocket closed '+self.id+" avalable "+clients)
+                if (!hasmaster()&&clients.length!=0){
+                    //console.log("master")
+                    clients[0].socket.send(JSON.stringify({ task: "elect", master: true }))
+                }
             }
+        }
+    });
 
-        })
-        //socket.send(JSON.stringify({ task: "uda", data: requiredupdates }))
-    }, 50);
-    socket.emit("ih")
-    socket.ping("cefuybgihn")
-    wss.emit("gybibhn")
 })
 
-
-function getupdates(to) {
-    let from = to.lastUpdate;
-    let required = [];
-    for (var i = 0; i < updates.length; i++) {
-        if (from < updates[i].time && to.id != updates[i].from) {
-            //console.log(to.id , updates[i].from)
-            required.push(updates[i]); updates[i].sentTo++;
-            if (updates[i].sentTo >= clients.length) { updates.splice(i, 1); i-- }
+function hasmaster(){
+    var isi =false;
+    for (oi in clients){
+        if (clients[oi].master){
+            isi =true;
         }
     }
-    return required
+    return isi;
 }
 
 
+function sendtoother(from,data){
+    clients.forEach(other =>{
+        if (other.id!=from.id){
+            other.socket.send(data)
+        }
+    })
+}
 
 const school = require('./school/school.js')
 
@@ -142,7 +143,7 @@ const school = require('./school/school.js')
 /* serves main page */
 app.get("/", function (req, res) {
     //console.log('static file request : ' + JSON.stringify(req.params));
-    res.sendfile('index.htm')
+    res.sendFile(__dirname +'/index.htm')
 });
 
 app.post("/user/add", function (req, res) {
