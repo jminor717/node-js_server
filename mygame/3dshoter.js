@@ -1,18 +1,27 @@
 Physijs.scripts.worker = 'Physijs/physijs_worker.js';
-Physijs.scripts.ammo = 'Physijs/examples/js/ammo3.js';
+Physijs.scripts.ammo = 'Physijs/examples/js/ammo2.js';
 var camera, scene, renderer, controls;
 //Physijs/Physijs/examples/js
 var craft;
 var master = false;
-//var arrowHelper
-var raycaster;
 var tmpQuaternion = new THREE.Quaternion();
 var blocker = document.getElementById('blocker');
 var instructions = document.getElementById('instructions');
 var havePointerLock = 'pointerLockElement' in document || 'mozPointerLockElement' in document || 'webkitPointerLockElement' in document;
+var controlsEnabled = false;
+var stopnow = false;
+var moveForward = false;
+var moveBackward = false;
+var moveLeft = false;
+var moveRight = false;
+var up = false;
+var down = false;
 var trackedObjects = {};
-var uuidcount = 1
-if (havePointerLock) {
+var pool_in_use=[], pool_store=[];
+
+
+
+if (havePointerLock) {//code to setup pointer lock
     var element = document.body;
     var pointerlockchange = function (event) {
         if (document.pointerLockElement === element || document.mozPointerLockElement === element || document.webkitPointerLockElement === element) {
@@ -25,18 +34,14 @@ if (havePointerLock) {
             instructions.style.display = '';
         }
     };
-    var pointerlockerror = function (event) {
-        instructions.style.display = '';
-    };
+    var pointerlockerror = function (event) { instructions.style.display = ''; };
     // Hook pointer lock state change events
     document.addEventListener('pointerlockchange', pointerlockchange, false);
     document.addEventListener('mozpointerlockchange', pointerlockchange, false);
     document.addEventListener('webkitpointerlockchange', pointerlockchange, false);
-
     document.addEventListener('pointerlockerror', pointerlockerror, false);
     document.addEventListener('mozpointerlockerror', pointerlockerror, false);
     document.addEventListener('webkitpointerlockerror', pointerlockerror, false);
-
     instructions.addEventListener('click', function (event) {
         instructions.style.display = 'none';
         // Ask the browser to lock the pointer
@@ -44,28 +49,17 @@ if (havePointerLock) {
         element.requestPointerLock();
     }, false);
 } else {
-    instructions.innerHTML = 'Your browser doesn\'t seem to support Pointer Lock API';
+    instructions.innerHTML = 'Your browser doesn\'t seem to support Pointer Lock API try using the latest version of chrome';
 }
 
 //init();
 //animate();
 
-var controlsEnabled = false;
-var stopnow = false;
-var moveForward = false;
-var moveBackward = false;
-var moveLeft = false;
-var moveRight = false;
-var up = false;
-var down = false;
-var canJump = false;
+
 var myBmaterial = Physijs.createMaterial(new THREE.MeshPhongMaterial({ specular: 0xffffff, flatShading: true, vertexColors: THREE.VertexColors }), 0.6, 0.3);
 var otherBmaterial = Physijs.createMaterial(new THREE.MeshPhongMaterial({ specular: 0xffffff, flatShading: true, vertexColors: THREE.VertexColors }), 0.6, 0.3);
 
-var prevTime = performance.now();
 var velocity = new THREE.Vector3();
-var direction = new THREE.Vector3();
-
 
 function staticinit(objs) {
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 1, 1000);
@@ -434,9 +428,9 @@ function onWindowResize() {
 
 function onDocumentmousedown(event) {
     //console.log(event.button,event.button,event.timeStamp)
-    if (event.button == 0) { single(400000, 400, event, 400) }
+    if (event.button == 0) { single(400000, 400, event, 500) }
     if (event.button == 1) { grenade(250000, 50, event, 150) }
-    if (event.button == 2) { shotgun(400000, 200, 10, event, 250) }
+    if (event.button == 2) { shotgun(400000, 200, 10, event, 350) }
     for (obj in scene.children) {
         // console.log(scene.children[obj].uuid)
     }
@@ -448,6 +442,8 @@ function grenade(total, speed, event, range) {
     time = (range / speed) * 1000
     handleCollision = function (collided_with, linearVelocity, angularVelocity) {
         scene.remove(this);
+        //removebullettss(this)
+        console.log("ekusplotion wd")
         explosion(this.position, 100, this.mass);
         //scene.remove(this)   //console.log(collided_with)
     }
@@ -455,6 +451,8 @@ function grenade(total, speed, event, range) {
         if (box.parent === scene) {
             var center = box.position;
             scene.remove(box);
+            //removebullettss(box)
+            console.log("ekusplotion")
             explosion(center, 100, box.mass * 3);
         }
     }
@@ -487,7 +485,7 @@ function explosion(positionor, numobjects, totalmass) {
         var position = new THREE.Vector3(positionor.x + ofset.x, positionor.y + ofset.y, positionor.z + ofset.z)
         //velocity = new THREE.Vector3((Math.random() * 800) - 400, (Math.random() * 800) - 400, (Math.random() * 800) - 400);
         let velocity = position.clone().sub(positionor).normalize().multiplyScalar(400)
-        ////////////////#################################////////////////#################################////////////////#################################
+        /*///////////////#################################////////////////#################################////////////////#################################
         box = new Physijs.SphereMesh(box_geometry, myBmaterial);
         box.dealDamage = true;
         box.castShadow = true;
@@ -505,12 +503,13 @@ function explosion(positionor, numobjects, totalmass) {
         scene.add(box);
         box.setLinearVelocity(velocity);
         boxes.push(box)
-        //boxes.push(makeprojectile(position, velocity, (totalmass / numobjects), null, box_geometry, material, 0.5,time));
-        ////////////////#################################////////////////#################################////////////////#################################
+        //
+        /*///////////////#################################////////////////#################################////////////////#################################
+        boxes.push(makeprojectile(position, velocity, (totalmass / numobjects), null, box_geometry, myBmaterial, 0.5,time));
     }
     maketransit(boxes)
     setTimeout(removebullett.bind(null, boxes), time);
-    function removebullett(boxes) { for (key in boxes) { scene.remove(boxes[key]) } }
+    function removebullett(boxes) { for (key in boxes) { removebullettss(boxes[key]) /*scene.remove(boxes[key])*/ } }
 }
 
 function shotgun(total, speed, pelets, event, range) {
@@ -530,8 +529,10 @@ function shotgun(total, speed, pelets, event, range) {
 
     }
     maketransit(boxes)
+    //setTimeout(removebullett.bind(null, boxes), time);
+    //function removebullett(boxes) { for (key in boxes) { scene.remove(boxes[key]) } }
     setTimeout(removebullett.bind(null, boxes), time);
-    function removebullett(boxes) { for (key in boxes) { scene.remove(boxes[key]) } }
+    function removebullett(boxes) { for (key in boxes) { removebullettss(boxes[key]) /*scene.remove(boxes[key])*/ } }
 }
 
 function single(total, speed, event, range) {
@@ -550,27 +551,88 @@ function single(total, speed, event, range) {
     maketransit(boxes)
 }
 
+function removebullettss(tmp) {
+    //tmp.setLinearVelocity(new THREE.Vector3(0, 0, 0));
+    //tmp.setAngularVelocity(new THREE.Vector3(0, 0, 0));
+    //tmp.__dirtyPosition = true;
+    //tmp.position.x = (Math.random() * 1000) +6000
+    //tmp.position.y = (Math.random() * 1000) +6000
+    //tmp.position.z = (Math.random() * 1000) +6000
+    //tmp._physijs.position.x = tmp.position.x
+    //tmp._physijs.position.y = tmp.position.y
+    //tmp._physijs.position.z = tmp.position.z
+    scene.remove(tmp)
+    //console.log(tmp)
+    for (i in pool_in_use){
+        if (tmp.uuid==pool_in_use[i].uuid){
+            avdoih=pool_in_use.splice(i,1);
+            //console.log(avdoih[0])
+            pool_store.push(avdoih[0]);
+            break;
+        }
+    }
+    //console.log(pool_store)
+}
 
 function makeprojectile(position, velocity, mass, time, geomitty, material, radius, timeout) {
+    var tmp, meetsneeds=false ;
+    try{
+        pool_store.forEach(function(item, index,arr) {
+            if (item.rad === radius) {
+                tmp= arr.splice(index, 1);
+                tmp=tmp[0]
+                meetsneeds=true;
+                throw "leave"
+            }
+        });
+    }catch(e){}
+
+    if(meetsneeds){
+        //console.log(tmp)
+        tmp.mass = mass;
+        //tmp.__dirtyPosition = true;
+        tmp.position.x = position.x;
+        tmp.position.y = position.y;
+        tmp.position.z = position.z;
+        //tmp._physijs.position.x = position.x;
+        //tmp._physijs.position.y = position.y;
+        //tmp._physijs.position.z = position.z;
+        tmp.vel = velocity;
+        tmp.timeout = timeout
+        scene.add(tmp);
+        tmp.setLinearVelocity(velocity);
+        if (time != null) {
+            setTimeout(removebullettss.bind(null, box), time);
+            pool_in_use.push(tmp)
+        }
+        return tmp;
+    }
+
+
     box = new Physijs.SphereMesh(geomitty, material);
     box.dealDamage = true;
     box.castShadow = true;
     box.mass = mass;
+    box.__dirtyPosition = true;
     box.position.x = position.x;
     box.position.y = position.y;
     box.position.z = position.z;
+    //tmp._physijs.position.x = position.x;
+   // tmp._physijs.position.y = position.y;
+    //tmp._physijs.position.z = position.z;
     box.dim = { r: radius };
+    box.rad=radius
     box.vel = velocity;
     box.timeout = timeout
-    if (time != null) {
-        setTimeout(removebullett.bind(null, box), time);
-        function removebullett(box) { /*console.log(box);*/ scene.remove(box); }
-    }
     var o = new Uint32Array(1);
     window.crypto.getRandomValues(o);
     box.uuid = o[0];
     scene.add(box);
     box.setLinearVelocity(velocity);
+        if (time != null) {
+        setTimeout(removebullettss.bind(null, box), time);
+        pool_in_use.push(box)
+    }
     return box;
 }
 
@@ -593,44 +655,7 @@ function animate() {
         
         if(obj.tipe==="craft"){
             if (obj.me){
-                if (controlsEnabled === true) {
-                    
-                    velocity = obj.self._physijs.linearVelocity
-            
-                    var tmpmove = new THREE.Vector3(0, 0, 0);
-                    if (moveForward) tmpmove.z = 1;
-                    if (moveBackward) tmpmove.z = -1;
-            
-                    if (moveRight) tmpmove.x = -0.5;
-                    if (moveLeft) tmpmove.x = 0.5;
-            
-                    if (up) tmpmove.y = -0.5;
-                    if (down) tmpmove.y = 0.5;
-                    obj.self.__dirtyPosition = true;
-                    obj.self.__dirtyVelocity = true;
-                    obj.self.__dirtyRotation = true;
-                    if (stopnow) {
-                        var m41 = new THREE.Matrix4();
-                        if (velocity.length() < 2) {//if the craft speed is below this use a scale to slow it to a stop
-                            m41.makeScale(.9, .9, .9);
-                            velocity.applyMatrix4(m41);
-                        } else {
-                            if (velocity.x < 0) velocity.x += .5; else velocity.x += -.5;
-                            if (velocity.y < 0) velocity.y += .5; else velocity.y += -.5;
-                            if (velocity.z < 0) velocity.z += 1; else velocity.z += -1;
-                        }
-                    }
-            
-                    obj.self.rotation.setFromQuaternion(controls.getObject().quaternion)
-                    tmpmove.applyQuaternion(obj.self.quaternion);
-                    velocity.x -= tmpmove.x;
-                    velocity.z -= tmpmove.z;
-                    velocity.y -= tmpmove.y;
-            
-                    obj.self.setLinearVelocity(velocity)
-                    controls.updateRotationVector();
-                    updatebyUUid(obj.self, "craft")
-                }
+
             }
             //console.log(obj.tipe);
             continue;
@@ -653,7 +678,44 @@ function animate() {
             }
         }
     }
-    
+    if (controlsEnabled === true) {
+                    
+        velocity = craft._physijs.linearVelocity
+
+        var tmpmove = new THREE.Vector3(0, 0, 0);
+        if (moveForward) tmpmove.z = 1;
+        if (moveBackward) tmpmove.z = -1;
+
+        if (moveRight) tmpmove.x = -0.5;
+        if (moveLeft) tmpmove.x = 0.5;
+
+        if (up) tmpmove.y = -0.5;
+        if (down) tmpmove.y = 0.5;
+        craft.__dirtyPosition = true;
+        craft.__dirtyVelocity = true;
+        craft.__dirtyRotation = true;
+        if (stopnow) {
+            var m41 = new THREE.Matrix4();
+            if (velocity.length() < 2) {//if the craft speed is below this use a scale to slow it to a stop
+                m41.makeScale(.9, .9, .9);
+                velocity.applyMatrix4(m41);
+            } else {
+                if (velocity.x < 0) velocity.x += .5; else velocity.x += -.5;
+                if (velocity.y < 0) velocity.y += .5; else velocity.y += -.5;
+                if (velocity.z < 0) velocity.z += 1; else velocity.z += -1;
+            }
+        }
+
+        craft.rotation.setFromQuaternion(controls.getObject().quaternion)
+        tmpmove.applyQuaternion(craft.quaternion);
+        velocity.x -= tmpmove.x;
+        velocity.z -= tmpmove.z;
+        velocity.y -= tmpmove.y;
+
+        craft.setLinearVelocity(velocity)
+        controls.updateRotationVector();
+        updatebyUUid(craft, "craft")
+    }
     scene.simulate();
     renderer.render(scene, camera);
 }
@@ -698,9 +760,15 @@ function appendBuffer(buffer1, buffer2) {
 };
 
 function makebullete(objs) {
+
     boxes = [];
     for (id in objs) {
         objj = objs[id];
+        var box_geometry = new THREE.SphereGeometry(objj.r, 8, 8)
+        boxes.push(makeprojectile(objj.pos, objj.vel, objj.mas, null, box_geometry, otherBmaterial, objj.r, objj.tim))
+        //makeprojectile(position, velocity, mass, time, geomitty, material, radius, timeout)
+        /*
+        
         //console.log(objj)
         var box_geometry = new THREE.SphereGeometry(objj.r, 8, 8)
         //var material = Physijs.createMaterial( new THREE.MeshPhongMaterial({ specular: 0xffffff, flatShading: true, vertexColors: THREE.VertexColors }),.95, .3  );
@@ -722,14 +790,12 @@ function makebullete(objs) {
         scene.add(box);
         box.setLinearVelocity(new THREE.Vector3(objj.vel.x, objj.vel.y, objj.vel.z))
         boxes.push(box)
+        */
     }
+    //setTimeout(removebullett.bind(null, boxes), objj.tim);
+    //function removebullett(boxes) { for (key in boxes) { scene.remove(boxes[key]) } }
     setTimeout(removebullett.bind(null, boxes), objj.tim);
-    function removebullett(boxes) { for (key in boxes) { scene.remove(boxes[key]) } }
-    try {
-
-    } catch (err) {
-        console.log(boxes)
-    }
+    function removebullett(boxes) { for (key in boxes) { removebullettss(boxes[key]) /*scene.remove(boxes[key])*/ } }
 
 }
 

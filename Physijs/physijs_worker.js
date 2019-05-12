@@ -492,18 +492,25 @@ public_functions.applyEngineForce = function( details ) {
 };
 
 public_functions.removeObject = function( details ) {
-	world.removeRigidBody( _objects[details.id] );
-	Ammo.destroy(_objects[details.id]);
-	Ammo.destroy(_motion_states[details.id]);
-    if (_compound_shapes[details.id]) Ammo.destroy(_compound_shapes[details.id]);
-	if (_noncached_shapes[details.id]) Ammo.destroy(_noncached_shapes[details.id]);
-	var ptr = _objects[details.id].a != undefined ? _objects[details.id].a : _objects[details.id].ptr;
-	delete _objects_ammo[ptr];
-	delete _objects[details.id];
-	delete _motion_states[details.id];
-    if (_compound_shapes[details.id]) delete _compound_shapes[details.id];
-	if (_noncached_shapes[details.id]) delete _noncached_shapes[details.id];
-	_num_objects--;
+    try{
+        world.removeRigidBody( _objects[details.id] );
+        Ammo.destroy(_objects[details.id]);
+        Ammo.destroy(_motion_states[details.id]);
+        if (_compound_shapes[details.id]) Ammo.destroy(_compound_shapes[details.id]);
+        if (_noncached_shapes[details.id]) Ammo.destroy(_noncached_shapes[details.id]);
+        var ptr = _objects[details.id].a != undefined ? _objects[details.id].a : _objects[details.id].ptr;
+        delete _objects_ammo[ptr];
+        delete _objects[details.id];
+        delete _motion_states[details.id];
+        if (_compound_shapes[details.id]) delete _compound_shapes[details.id];
+        if (_noncached_shapes[details.id]) delete _noncached_shapes[details.id];
+        _num_objects--;
+    }catch(err){
+
+        
+        //console.log(err)
+    }
+
 };
 
 public_functions.updateTransform = function( details ) {
@@ -533,16 +540,24 @@ public_functions.updateMass = function( details ) {
 	// #TODO: changing a static object into dynamic is buggy
 	_object = _objects[details.id];
 
-	// Per http://www.bulletphysics.org/Bullet/phpBB3/viewtopic.php?p=&f=9&t=3663#p13816
-	world.removeRigidBody( _object );
+    // Per http://www.bulletphysics.org/Bullet/phpBB3/viewtopic.php?p=&f=9&t=3663#p13816
+    try{
+        world.removeRigidBody( _object );
+        _vec3_1.setX(0);
+        _vec3_1.setY(0);
+        _vec3_1.setZ(0);
 
-	_vec3_1.setX(0);
-	_vec3_1.setY(0);
-	_vec3_1.setZ(0);
+        _object.setMassProps( details.mass, _vec3_1 );
+        world.addRigidBody( _object );
+        _object.activate();
 
-	_object.setMassProps( details.mass, _vec3_1 );
-	world.addRigidBody( _object );
-	_object.activate();
+
+    }catch(err){
+        //console.log(err)
+    }
+	
+
+
 };
 
 public_functions.applyCentralImpulse = function ( details ) {

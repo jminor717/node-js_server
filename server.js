@@ -42,6 +42,7 @@ wss.on("connection", function (socket) {
     }
     if (!hasmaster()) {
         console.log("creat master id: " + clientId + " ||craft uuid: " + craftuuid + " ||at " + new Date())
+        //console.log('creat master id:   ${clientId}   ||craft uuid:   ${craftuuid}  ||at  ${new Date()}')
         ismaster = true
         socket.send(JSON.stringify({ task: "elect", master: ismaster }))
     }
