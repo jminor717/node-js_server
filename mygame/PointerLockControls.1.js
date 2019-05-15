@@ -3,8 +3,9 @@
  */
 
 THREE.PointerLockControls = function (camera) {
+    "use strict";
     console.log("camm")
-console.log(camera)
+    console.log(camera)
     var scope = this;
 
     camera.rotation.set(0, 0, 0);
@@ -40,7 +41,7 @@ console.log(camera)
             case 81: /*Q*/ rollLeft = 1; break;
             case 69: /*E*/ rollRight = 1; break;
 
-            case  88:stopnow=true;
+            case 88: stopnow = true;
             //	case 32: // space
             //		if ( canJump === true ) velocity.y += 350;
             //		canJump = false;
@@ -67,7 +68,7 @@ console.log(camera)
 
             case 81: /*Q*/ rollLeft = 0; break;
             case 69: /*E*/ rollRight = 0; break;
-            case  88:stopnow=false;
+            case 88: stopnow = false;
         }
     };
 
@@ -79,38 +80,10 @@ console.log(camera)
         movementY += event.movementY || event.mozMovementY || event.webkitMovementY || 0;
 
         tmpQuaternion = new THREE.Quaternion();
-        
-        mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-        mouse.y = - (event.clientY / window.innerHeight) * 2 + 1;
-
-        //		move.applyQuaternion(this.tmpQuaternion);
-        /*
-                this.moveVector.applyQuaternion(tmpQuaternion);
-                movestatevector.applyQuaternion(tmpQuaternion);
-        
-                this.object.translateX( this.moveVector.x * moveMult );
-                this.object.translateY( this.moveVector.y * moveMult );
-                this.object.translateZ( this.moveVector.z * moveMult );
-        
-                var tmpove = new THREE.Vector3(this.moveVector.x * moveMult,this.moveVector.y * moveMult,this.moveVector.z * moveMult);
-                craft.veloicity=tmpove;
-        
-                tmpQuaternion.set( this.rotationVector.y * rotMult, this.rotationVector.x * rotMult, this.rotationVector.z * rotMult, 1 ).normalize();
-                //camera.quaternion.multiply( this.tmpQuaternion );
-                this.object.quaternion.multiply(tmpQuaternion );
-        *///		tmpQuaternion.set(-movementY * rotMult, -movementX * rotMult, 0, 1 ).normalize();
-        //console.log(yawObject)
-        //		yawObject.quaternion.multiply(tmpQuaternion);
-        //yawObject.rotation.y -= movementX * 0.002;
-        //pitchObject.rotation.x -= movementY * 0.002;
-
     };
 
     this.updateRotationVector = function () {
         tmpQuaternion = new THREE.Quaternion();
-        //rollRight,rollLeft
-        //tmpQuaternion.set(1, 1,(0+rollRight-rollLeft) * rotMult, 1 ).normalize();
-        //if ((rollRight-rollLeft)==0) return;
         tmpQuaternion.set(-movementY * rotMult, -movementX * rotMult, (rollLeft - rollRight) * rotMult * 30, 1).normalize();
         yawObject.quaternion.multiply(tmpQuaternion);
         movementY = 0; movementX = 0;
@@ -126,26 +99,12 @@ console.log(camera)
     this.getObject = function () {
         return yawObject;
     };
-    this.getcamera=function(){
+    this.getcamera = function () {
         return camera;
     }
     this.getquaternion = function () {
         return tmpQuaternion;
     }
-    this.getDirection = function () {
-        //*
-        var direction = new THREE.Vector3(0, 0, - 1);
-        var rotation = new THREE.Euler(0, 0, 0, "YXZ");
-        return function (v) {
-            console.log(yawObject)
-            camera.quaternion=tmpQuaternion
-            rotation.set(yawObject.rotation.x, yawObject.rotation.y, 0);
-            v.copy(direction).applyEuler(rotation);
-            return v;
-        };
-
-        //*/
-    }();
 };
 
 

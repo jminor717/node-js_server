@@ -10,7 +10,7 @@ const parse = require('./byteParser.js')
 const WebSocket = require('ws');
 
 const wss = new WebSocket.Server({
-    port: 8080,
+    port: 8050,
     perMessageDeflate: {
         zlibDeflateOptions: {
             // See zlib defaults.
@@ -112,7 +112,7 @@ wss.on("connection", function (socket) {
                 var datas = parse.frombytesnode(data)
                 // updates.push({ updates: data, sentTo: 1, time: new Date().getTime(), from: self.id })
                 if (scene == null) { return }
-                if (scene[datas.id] == null) {
+                if (scene[datas.id] == null&&datas.helt!=null ) {
                     scene[datas.id] = {
                         vel: datas.vel,
                         pos: datas.pos,

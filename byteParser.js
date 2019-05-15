@@ -1,14 +1,21 @@
-module.exports = {
-    tobytesnode: function (obj, precesion = 4) {
-        return tobytes(obj.pos, obj.vel, obj.rot, obj.rotvel, obj.helt, obj.id, precesion);
-    },
-    frombytesnode: function (buffer) {
-        return frombytes(buffer);
-    },
-    frombytesgroupnode: function (buffer) {
-        return frombytesgroup(buffer);
+if (typeof window === 'undefined') {
+    module.exports = {
+        tobytesnode: function (obj, precesion = 4) {
+            return tobytes(obj.pos, obj.vel, obj.rot, obj.rotvel, obj.helt, obj.id, precesion);
+        },
+        frombytesnode: function (buffer) {
+            return frombytes(buffer);
+        },
+        frombytesgroupnode: function (buffer) {
+            return frombytesgroup(buffer);
+        }
     }
-}
+
+}else{console.log("congratulations your a browser")}
+
+
+
+
 //toArrayBuffer(buffer)
 function toArrayBuffer(buf) {
     var ab = new ArrayBuffer(buf.length);
@@ -97,7 +104,7 @@ function objtipebyte(code = new ArrayBuffer()) {
     }
 }
 
-function objtipetoByte(tipe = "", dim = {}, time,mass) {
+function objtipetoByte(tipe = "", dim = {}, time, mass) {
     var buffer = new ArrayBuffer(16);
     switch (tipe) {
         case "box"://box

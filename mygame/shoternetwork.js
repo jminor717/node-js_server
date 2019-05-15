@@ -1,11 +1,10 @@
+"use strict";
+//class object {
+//}
+//var schema = { "task": "getobjects" }
 
-class object {
 
-}
-var schema = { "task": "getobjects" }
-
-
-connection = new WebSocket('ws://192.168.1.39:8080');
+var connection = new WebSocket('ws://192.168.1.39:8050');
 connection.onopen = function () {
     connection.send(JSON.stringify({ "task": "getobjects" }))
 };
@@ -42,33 +41,29 @@ connection.onmessage = function (data) {
         connection.binaryType = 'arraybuffer';
         //console.log(data.data)
         if (data.data.byteLength == 4) {
-            var idds = new Uint32Array(data.data)
-            removeFromSceneById(idds[0])
+            let idds = new Uint32Array(data.data);
+            removeFromSceneById(idds[0]);
         } else if (data.data.byteLength % 72 == 0) {
-            makebullete(frombytesgroup(data.data))
+            makebullete(frombytesgroup(data.data));
         } else {
             //console.log(data.data)
-            updateobj(frombytes(data.data))
+            updateobj(frombytes(data.data));
         }
     }
 
 }
 
-function sent() {
-    connection.send(2626)
-}
 function updatebyUUid(obj, tipe) {
-    dat = tobytes(obj.position, obj._physijs.linearVelocity, obj.rotation, obj._physijs.angularVelocity, obj.health, obj.uuid, 4)
-    connection.send(dat)
+    connection.send(tobytes(obj.position, obj._physijs.linearVelocity, obj.rotation, obj._physijs.angularVelocity, obj.health, obj.uuid, 4))
 }
 function removefromscene(obj) {
-    var buf = new ArrayBuffer(4)
-    var arr = new Uint32Array(buf)
+    let buf = new ArrayBuffer(4);
+    let arr = new Uint32Array(buf);
     arr[0] = obj.uuid;
     //console.log(arr[0],obj.uuid)
-    connection.send(buf)
+    connection.send(buf);
 }
 
 function sendbytts(arraybuffer) {
-    connection.send(arraybuffer)
+    connection.send(arraybuffer);
 }
