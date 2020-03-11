@@ -188,6 +188,11 @@ const school = require('./school/school.js')
 /* serves main page */
 app.get("/", function (req, res) {
     //console.log('static file request : ' + JSON.stringify(req.params));
+    res.sendFile(__dirname + '/MainForm.html')
+});
+
+app.get("/index", function (req, res) {
+    //console.log('static file request : ' + JSON.stringify(req.params));
     res.sendFile(__dirname + '/index.htm')
 });
 

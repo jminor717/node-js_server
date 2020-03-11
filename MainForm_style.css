@@ -1,0 +1,27 @@
+body {
+    background-color: #808080;
+}
+
+.tabelHeader {
+    background-color: #EFEFEF;
+}
+
+.tabel {
+    background-color: #DCDCDC;
+}
+
+td, th {
+    border: 1px solid #dddddd;
+    text-align: left;
+    scroll-padding-left: 8px;
+    scroll-padding-right: 8px;
+    width: 100px;
+    height: 20px;
+}
+
+
+.blank_row
+{
+    /*height: 10px !important;*/
+    background-color: #DCDCDC;
+}

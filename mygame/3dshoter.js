@@ -3,7 +3,7 @@
 
 
 Physijs.scripts.worker = 'Physijs/physijs_worker.js';
-Physijs.scripts.ammo = 'Physijs/examples/js/ammo2.js';
+Physijs.scripts.ammo = 'Physijs/examples/js/ammo.js';
 var camera = {}, scene = {}, renderer = {}, controls = {};
 //Physijs/Physijs/examples/js
 var craft = {};
