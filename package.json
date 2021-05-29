@@ -12,7 +12,7 @@
   "dependencies": {
     "express": "^4.16.4",
     "node-rest-client": "^3.1.0",
-    "ws": "^7.0.0"
+    "ws": "^7.4.6"
   },
   "devDependencies": {},
   "repository": {
