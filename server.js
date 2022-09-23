@@ -1,5 +1,5 @@
 //const express = require('express')
-const port = 80
+const port = 8080
 //express.Router.call()
 //const app = express()
 var app = require('express')();
@@ -221,6 +221,7 @@ app.get(/^(.+)$/, function (req, res) {
         switch (req.params[0]) {
             case "/index": index(req, res); break;
             case "/mygame": game(req, res); break;
+            case "/NewGameNewLife": newGame(req, res); break;
             case "/pong": pong(req, res); break;
             default:
                 //console.log('static file request : ' + JSON.stringify(req.params));
@@ -245,6 +246,10 @@ app.post("/school/weatherdata", function (req, res) {
 function game(req, res) {
     //console.log('static file request : ' + "/mygame/misc_controls_pointerlock.html");
     res.sendFile(__dirname + "/mygame/misc_controls_pointerlock.html");
+}
+function newGame(req, res) {
+    //console.log('static file request : ' + "/mygame/misc_controls_pointerlock.html");
+    res.sendFile(__dirname + "/NewGameNewLife/NGNL.html");
 }
 function pong(req, res) {
     //console.log('static file request : ' + "/mygame/pong3.html");
