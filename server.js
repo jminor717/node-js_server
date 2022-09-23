@@ -196,6 +196,27 @@ app.get("/index", function (req, res) {
     res.sendFile(__dirname + '/index.htm')
 });
 
+app.get("/cat", function (req, res) {
+    //console.log('static file request : ' + JSON.stringify(req.params));C:\repos\node-js_server\catBox.html
+    res.sendFile(__dirname + '/catBox1.html')
+});
+
+app.get("/catData", function (req, res) {
+    //console.log('static file request : ' + JSON.stringify(req.params));C:\repos\node-js_server\catBox.html
+    res.send({ FW1: Math.random(), FW2: Math.random(), FW3: Math.random(),
+        RW1: Math.random(), RW2: Math.random(), RW3: Math.random(),
+        FT: Math.random(), RT: Math.random(), RD: Math.random() * 8000, FD: Math.random() * 8000})
+});
+
+app.get("/overrideON", function (req, res) {
+    //console.log('static file request : ' + JSON.stringify(req.params));C:\repos\node-js_server\catBox.html 3600000
+    res.send("{\"time\":10000}")
+});
+app.get("/overrideOFF", function (req, res) {
+    //console.log('static file request : ' + JSON.stringify(req.params));C:\repos\node-js_server\catBox.html
+    res.send("{\"time\":0}")
+});
+
 app.post("/user/add", function (req, res) {
     /* some server side logic */
     console.log("/user/add");

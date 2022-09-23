@@ -70,7 +70,7 @@ function staticinit(objs) {
     "use strict";
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 1, 1000);
     scene.background = new THREE.Color(0xffffff);
-    scene.fog = new THREE.Fog(0xffffff, 0, 300);
+    scene.fog = new THREE.Fog(0xffffff, 0, 3000);
     var light = new THREE.HemisphereLight(0xeeeeff, 0x777788, 0.75);
     light.position.set(0.5, 1, 0.75);
     scene.add(light);
@@ -521,16 +521,13 @@ function removebullettss(tmp) {
 function makeprojectile(position, velocity, mass, time, geomitty, material, radius, timeout) {
     "use strict";
     let tmp, meetsneeds = false;
-    try {
-        pool_store.forEach(function (item, index, arr) {
-            if (item.rad === radius) {
-                tmp = arr.splice(index, 1);
-                tmp = tmp[0]
-                meetsneeds = true;
-                throw "leave"
-            }
-        });
-    } catch (e) { }
+    for (let index = 0; index < pool_store.length; index++) {
+        if (pool_store[index].rad === radius) {
+            tmp = pool_store.splice(index, 1)[0];
+            meetsneeds = true;
+            break;
+        }
+    }
 
     if (meetsneeds) {
         //console.log(tmp)

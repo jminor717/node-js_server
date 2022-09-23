@@ -4,7 +4,7 @@
 //var schema = { "task": "getobjects" }
 
 
-var connection = new WebSocket('ws://192.168.137.1:8050');
+var connection = new WebSocket('ws://192.168.43.25:8050');
 connection.onopen = function () {
     connection.send(JSON.stringify({ "task": "getobjects" }))
 };
