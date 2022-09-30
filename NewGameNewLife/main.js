@@ -251,12 +251,12 @@ function explosion(center, numObjects, totalMass) {
 
 function shotgun(totalMass, speed, range, pellets) {
     const spread = 0.5;
-    const halfSpread = spread/2;
+    const halfSpread = spread / 2;
 
 
     let CurCraftPos = controls.getObject().position;
     let centerVelocity;
-    let pelletMeshes =[];
+    let pelletMeshes = [];
 
     for (let i = 0; i < pellets; i++) {
         let randSpread = new THREE.Vector3((Math.random() * spread) - halfSpread, (Math.random() * spread) - halfSpread, (Math.random() * spread) - halfSpread);
@@ -301,8 +301,21 @@ function onDocumentMousedown(event) {
     if (event.button == 2) { shotgun(1, 150, 200, 20) }
 }
 
+function ContactServer() {
+    // git clone https://github.com/webrtc/samples.git
+    // check the server to see if there are any active offers
+    // if not
+    //      create a RTCPeerConnection
+    //      set up listeners and createOffer then send that offer to the server 
+    //      wait for the server to send an answer arrives use it to setRemoteDescription
+    // if there are active offers
+    //      create a RTCPeerConnection
+    //      set up listeners and setRemoteDescription based to the connection from the server
+    //      create answer and send to Server
+    // this should be duplicated to create 2 way communication
+}
 
-init().then(() => { animate(); });
+init().then(() => { ContactServer(); animate(); });
 
 function handleCollision() {
     console.log("bleh");
@@ -537,8 +550,8 @@ function animate() {
         if (UserInputs.moveRight) tmpmove.x += 0.5;
         if (UserInputs.moveLeft) tmpmove.x -= 0.5;
 
-        if (UserInputs.up) tmpmove.y += 0.5;
-        if (UserInputs.down) tmpmove.y -= 0.5;
+        if (UserInputs.moveUp) tmpmove.y += 0.5;
+        if (UserInputs.moveDown) tmpmove.y -= 0.5;
         if (UserInputs.activeDecelerate) {
             if (Math.abs(velocity.x) > 1) if (velocity.x < 0) tmpmove.x += .5; else tmpmove.x += -.5;
             if (Math.abs(velocity.y) > 1) if (velocity.y < 0) tmpmove.y += .5; else tmpmove.y += -.5;
