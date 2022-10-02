@@ -4,10 +4,44 @@
 import * as THREE from 'three';
 
 import { PointerLockControls } from './Controls.js';
-import { AmmoPhysics } from '../three.js/examples/jsm/physics/AmmoPhysics.js';
+// import { AmmoPhysics } from '../three.js/examples/jsm/physics/AmmoPhysics.js';
 import Stats from 'three/addons/libs/stats.module.js';
+import { OimoPhysics } from 'components/OimoPhysics.js';
 
 
+class callback_ContactCallback {
+    constructor() {
+    }
+    beginContact(c) {
+    }
+    preSolve(c) {
+    }
+    postSolve(c) {
+    }
+    endContact(c) {
+        const Id1 = c._b1?.CustomProperties, Id2 = c._b2?.CustomProperties;
+        if (Id1 && Id2) {
+            if ((Id1.ObjectType == objectTypes.box && (Id2.ObjectType == objectTypes.bullet || Id2.ObjectType == objectTypes.grenade || Id2.ObjectType == objectTypes.shrapnel))
+                || Id2.ObjectType == objectTypes.box && (Id1.ObjectType == objectTypes.bullet || Id1.ObjectType == objectTypes.grenade || Id1.ObjectType == objectTypes.shrapnel)) {
+                const O1 = physicsObjects[Id1.ID], O2 = physicsObjects[Id2.ID];
+                // console.log(Id1, Id2, O1, O2);
+
+                if (O1) {
+                    O1.instanceColor.needsUpdate = true;
+                    O1.setColorAt(Id1.index, color.setHex(0xff0000));
+                    // console.log(Id1, Id2, O1.instanceColor, O2);
+                    // scene.add(O1);
+                }
+                if (Id2.ObjectType == objectTypes.grenade && O2){
+                    DetonateGrenade(O2)
+                }
+
+            }
+
+        }
+
+    }
+}
 
 class UserInputState {
     constructor(roleRate) {
@@ -48,7 +82,7 @@ class UserInputState {
             //     if (canJump === true) velocity.y += 350;
             //     canJump = false;
             //     break;
-            case 32: single(0.1, 300, 500);
+            case 32: single(1, 0.05, 300, 500);
             default:
                 break;
         }
@@ -124,16 +158,41 @@ class OffscreenStorage {
         }
         this.SettlingTime = null;
     }
+}
 
+const objectTypes = Object.freeze({
+    craft: 0,
+    box: 1,
+    wall: 2,
+    bullet: 3,
+    grenade: 4,
+    shrapnel: 5,
+});
+
+class ObjectIdentifier {
+    constructor(objectType, uuid = null) {
+        if (uuid === null) {
+            this.ID = Math.floor(Math.random() * Math.pow(2, 32))
+        } else {
+            this.ID = uuid;
+        }
+        this.ObjectType = objectType;
+        this.index = 0;
+    }
 }
 
 let camera, scene, renderer, controls, physics, stats;
 let craftPos;
+let ObjectId = new ObjectIdentifier();
 const defaultBulletStore = new OffscreenStorage(20, 8, 1);
 const shrapnelStore = new OffscreenStorage(20, 8, 2);
 const bombStore = new OffscreenStorage(20, 8, 3);
 
+const CollisionHandler = new callback_ContactCallback();
+
 const objects = [];
+
+const physicsObjects = {};
 
 const friction = 1;
 const bulletMaterial = new THREE.MeshLambertMaterial();
@@ -148,7 +207,8 @@ const color = new THREE.Color();
 
 let craft = {};
 let craftProperties = {
-    mass: 1,
+    mass: 0.1,
+    inertia: 1,
     gunPositions: [
         new THREE.Vector3(-7, -7, -10),
         new THREE.Vector3(7, -7, -10),
@@ -163,7 +223,7 @@ function removeMesh(mesh, BulletStore) {
     BulletStore.storeMesh(mesh);
 }
 
-function makeBullet(mass, speed, craftOffset, bulletMesh) {
+function makeBullet(mass, inertia, speed, craftOffset, bulletMesh, ObjId) {
 
     let CurCraftPos = controls.getObject().position;
 
@@ -185,19 +245,19 @@ function makeBullet(mass, speed, craftOffset, bulletMesh) {
     bulletVel.add(velocity);
 
     scene.add(bulletMesh);
-    physics.addMesh(bulletMesh, mass);
+    physics.addMesh(bulletMesh, (mass), { CustomProperties: ObjId }, CollisionHandler);
     physics.setVelocity(bulletMesh, bulletVel);
 
-    impartedImpulse.add(bulletVel.multiplyScalar(mass / (craft.mass * 10)));
+    impartedImpulse.add(bulletVel.multiplyScalar(inertia / craft.inertia));
 }
 
-function single(mass, speed, range) {
+function single(mass, inertia, speed, range) {
     let bulletMesh;
     if (defaultBulletStore.currentIndex > 0) {
         bulletMesh = defaultBulletStore.getLastMeshMesh()
     }
     else {
-        const bulletGeometry = new THREE.IcosahedronGeometry(2, 1).toNonIndexed();
+        const bulletGeometry = new THREE.IcosahedronGeometry(2, 1);//.toNonIndexed();
         bulletMesh = new THREE.Mesh(bulletGeometry, bulletMaterial);
     }
 
@@ -205,34 +265,42 @@ function single(mass, speed, range) {
     craft.currentGunIndex++;
     craft.currentGunIndex = craft.currentGunIndex % craft.gunPositions.length;
 
-    makeBullet(mass, speed, craftOffset, bulletMesh)
+    ObjectId = new ObjectIdentifier(objectTypes.bullet);
+    makeBullet(mass, inertia, speed, craftOffset, bulletMesh, ObjectId )
 
     let time = (range / speed) * 1000
     setTimeout(removeMesh.bind(null, bulletMesh, defaultBulletStore), time);
 }
 
-function grenade(mass, speed, range) {
-    function removeBullets(box) {
+function DetonateGrenade(box) {
+    if (box.timeOut) {
+        clearTimeout(box.timeOut)
+        box.timeOut = null;
         if (box.parent === scene) {
             bombStore.storeMesh(box)
             console.log("ekusplotion", box.position)
-            explosion(box.position, 300, 3);
+            explosion(box.position, 300, box.mass * 900);
         }
     }
+}
 
-    const bulletGeometry = new THREE.IcosahedronGeometry(5, 1).toNonIndexed();
+function grenade(mass, inertia, speed, range) {
+    const bulletGeometry = new THREE.IcosahedronGeometry(5, 1);//.toNonIndexed();
     let bulletMesh = new THREE.Mesh(bulletGeometry, bulletMaterial);
 
-    makeBullet(mass, speed, new THREE.Vector3(0, 0, -10), bulletMesh)
+    ObjectId = new ObjectIdentifier(objectTypes.grenade);
+    makeBullet(mass, inertia, speed, new THREE.Vector3(0, 0, -10), bulletMesh, ObjectId)
 
-    let time = (range / speed) * 1000
-    setTimeout(removeBullets.bind(null, bulletMesh), time);
+    let time = (range / speed) * 1000;
+    bulletMesh.mass = mass;
+    bulletMesh.timeOut = setTimeout(DetonateGrenade.bind(null, bulletMesh), time);
+    physicsObjects[ObjectId.ID] = bulletMesh;
 }
 
 function explosion(center, numObjects, totalMass) {
     let time = (150 / 300) * 1000
     let shrapnelMeshes = []
-    let shrapnel = new THREE.IcosahedronGeometry(0.5, 1)
+    let shrapnel = new THREE.IcosahedronGeometry(0.5, 1);
     for (let i = 0; i < numObjects; i++) {
         let offset = new THREE.Vector3((Math.random() * 10) - 5, (Math.random() * 10) - 5, (Math.random() * 10) - 5)
         let position = new THREE.Vector3(center.x + offset.x, center.y + offset.y, center.z + offset.z)
@@ -241,7 +309,7 @@ function explosion(center, numObjects, totalMass) {
         let shrapnelMesh = new THREE.Mesh(shrapnel, bulletMaterial);
         shrapnelMesh.position.copy(position);
         scene.add(shrapnelMesh);
-        physics.addMesh(shrapnelMesh, totalMass / numObjects);
+        physics.addMesh(shrapnelMesh, totalMass / numObjects, { CustomProperties: new ObjectIdentifier(objectTypes.shrapnel) }, CollisionHandler);
         physics.setVelocity(shrapnelMesh, shrapnelVelocity);
         shrapnelMeshes.push(shrapnelMesh)
     }
@@ -249,7 +317,7 @@ function explosion(center, numObjects, totalMass) {
     function removeShrapnel(shrapnelMeshes) { for (let key in shrapnelMeshes) { removeMesh(shrapnelMeshes[key], shrapnelStore) /*scene.remove(boxes[key])*/ } }
 }
 
-function shotgun(totalMass, speed, range, pellets) {
+function shotgun(totalMass, inertia, speed, range, pellets) {
     const spread = 0.5;
     const halfSpread = spread / 2;
 
@@ -277,18 +345,18 @@ function shotgun(totalMass, speed, range, pellets) {
             bulletMesh = shrapnelStore.getLastMeshMesh()
         }
         else {
-            const bulletGeometry = new THREE.IcosahedronGeometry(0.5, 1).toNonIndexed();
+            const bulletGeometry = new THREE.IcosahedronGeometry(0.5, 1);//.toNonIndexed();
             bulletMesh = new THREE.Mesh(bulletGeometry, bulletMaterial);
         }
 
         bulletMesh.position.copy(craftOffset);
         scene.add(bulletMesh);
-        physics.addMesh(bulletMesh, totalMass / pellets);
+        physics.addMesh(bulletMesh, (totalMass) / pellets, { CustomProperties: new ObjectIdentifier(objectTypes.bullet) }, CollisionHandler);
         physics.setVelocity(bulletMesh, bulletVel);
         pelletMeshes.push(bulletMesh)
     }
 
-    impartedImpulse.add(centerVelocity.multiplyScalar(totalMass / (craft.mass * 10)));
+    impartedImpulse.add(centerVelocity.multiplyScalar(inertia / craft.inertia));
 
     let time = (range / speed) * 1000
     setTimeout(removePellets.bind(null, pelletMeshes), time);
@@ -296,9 +364,9 @@ function shotgun(totalMass, speed, range, pellets) {
 }
 
 function onDocumentMousedown(event) {
-    if (event.button == 0) { single(0.1, 300, 500) }
-    if (event.button == 1) { grenade(1, 50, 150) }
-    if (event.button == 2) { shotgun(1, 150, 200, 20) }
+    if (event.button == 0) { single(1, 0.05, 300, 500) }
+    if (event.button == 1) { grenade(1, 1, 50, 150) }
+    if (event.button == 2) { shotgun(300, 0.3, 150, 200, 20) }
 }
 
 function ContactServer() {
@@ -316,10 +384,6 @@ function ContactServer() {
 }
 
 init().then(() => { ContactServer(); animate(); });
-
-function handleCollision() {
-    console.log("bleh");
-}
 
 function createColoredWall(offset, rotation) {
     // floor
@@ -378,24 +442,26 @@ function CreateWall(boxSize, offset) {
         physicalFloor.position.z = offset.z;
     //physicalFloor.receiveShadow = true;
     scene.add(physicalFloor);
-    physics.addMesh(physicalFloor);
+    physics.addMesh(physicalFloor, 0, { CustomProperties: new ObjectIdentifier(objectTypes.wall) });
 }
 
 async function init() {
 
-    physics = await AmmoPhysics(THREE);
+    physics = await OimoPhysics(0);
+    // physics = await AmmoPhysics(THREE);
+    // physics.setGravity(0, 0, 0);
+
     craftPos = new THREE.Vector3();
 
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x666666);
     // scene.background = new THREE.Color(0xffffff);
     scene.fog = new THREE.Fog(0x666666, 0, 750);
-    physics.setGravity(0, 0, 0);
 
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 1, 1000);
     camera.position.y = 20;
 
-    const craftGeometry = new THREE.IcosahedronGeometry(7, 2).toNonIndexed();
+    const craftGeometry = new THREE.IcosahedronGeometry(7, 2);//.toNonIndexed();
     const craftMaterial = new THREE.MeshLambertMaterial();
     const craftMesh = new THREE.Mesh(craftGeometry, craftMaterial);
     craftMesh.position.y = 0;
@@ -409,13 +475,13 @@ async function init() {
     // Object.assign(craft, craftMesh);
     // Object.assign(craft, camera);
     craft.add(craftMesh);
-    physics.addMesh(craft.children[0], craft.mass);
+    physics.addMesh(craft.children[0], craft.mass, { CustomProperties: new ObjectIdentifier(objectTypes.craft) });
     scene.add(craft);
 
     const ambientLight = new THREE.AmbientLight(0x404040);
     scene.add(ambientLight);
 
-    const bulbGeometry = new THREE.IcosahedronGeometry(20, 3).toNonIndexed();
+    const bulbGeometry = new THREE.IcosahedronGeometry(20, 3);//.toNonIndexed();
     let bulbLight = new THREE.PointLight(0xffee88, 1, 1000);
 
     let bulbMat = new THREE.MeshStandardMaterial({
@@ -431,7 +497,7 @@ async function init() {
     bulbLight.castShadow = true;
     scene.add(bulbLight);
     scene.add(bulbMesh);
-    physics.addMesh(bulbMesh);
+    physics.addMesh(bulbMesh, 0, { CustomProperties: new ObjectIdentifier(objectTypes.box) });
     objects.push(bulbMesh);
 
     controls = new PointerLockControls(craft, document.body);
@@ -491,7 +557,6 @@ async function init() {
     boxes.instanceMatrix.setUsage(THREE.DynamicDrawUsage); // will be updated every frame
     boxes.castShadow = true;
     boxes.receiveShadow = true;
-    boxes.addEventListener('collision', handleCollision);
     scene.add(boxes);
     objects.push(boxes);
     let w = 30, w_2 = 15;
@@ -500,10 +565,12 @@ async function init() {
 
         matrix.setPosition(Math.floor(Math.random() * w - w_2) * w, Math.floor(Math.random() * w) * w + w_2, Math.floor(Math.random() * w - w_2) * w);
         boxes.setMatrixAt(i, matrix);
-        boxes.setColorAt(i, color.setHex(0xffffff * Math.random()));
+         boxes.setColorAt(i, color.setHex(0xffffff * Math.random()));
     }
 
-    physics.addMesh(boxes, 3);
+    ObjectId = new ObjectIdentifier(objectTypes.box);
+    physicsObjects[ObjectId.ID] = boxes;
+    physics.addMesh(boxes, 0.1, { CustomProperties: ObjectId });
 
 
     console.log(craft)
@@ -519,6 +586,8 @@ async function init() {
     document.body.appendChild(stats.dom);
 
     window.addEventListener('resize', onWindowResize);
+
+
 }
 
 function onWindowResize() {
@@ -532,12 +601,13 @@ function onWindowResize() {
 
 function animate() {
 
+
     requestAnimationFrame(animate);
 
     const time = performance.now();
 
     let internalVelocity = physics.getVelocity(craft.children[0]);
-    const simVelocity = new THREE.Vector3(internalVelocity.x(), internalVelocity.y(), internalVelocity.z());
+    const simVelocity = new THREE.Vector3(internalVelocity.x, internalVelocity.y, internalVelocity.z);
     if (simVelocity.length() === 0) {
         simVelocity.set(velocity.x, velocity.y, velocity.z)
     }
