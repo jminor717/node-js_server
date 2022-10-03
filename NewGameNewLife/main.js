@@ -32,7 +32,7 @@ class callback_ContactCallback {
                     // console.log(Id1, Id2, O1.instanceColor, O2);
                     // scene.add(O1);
                 }
-                if (Id2.ObjectType == objectTypes.grenade && O2){
+                if (Id2.ObjectType == objectTypes.grenade && O2) {
                     DetonateGrenade(O2)
                 }
 
@@ -266,7 +266,7 @@ function single(mass, inertia, speed, range) {
     craft.currentGunIndex = craft.currentGunIndex % craft.gunPositions.length;
 
     ObjectId = new ObjectIdentifier(objectTypes.bullet);
-    makeBullet(mass, inertia, speed, craftOffset, bulletMesh, ObjectId )
+    makeBullet(mass, inertia, speed, craftOffset, bulletMesh, ObjectId)
 
     let time = (range / speed) * 1000
     setTimeout(removeMesh.bind(null, bulletMesh, defaultBulletStore), time);
@@ -369,21 +369,193 @@ function onDocumentMousedown(event) {
     if (event.button == 2) { shotgun(300, 0.3, 150, 200, 20) }
 }
 
-function ContactServer() {
+let pc;
+let sendChannel, receiveChannel, sendCount = 0, sendInterval;
+const MAX_CHUNK_SIZE = 262144;
+let WaitForNetwork, NetworkFoundResolve, NetworkFoundReject; 
+
+const signaling = new BroadcastChannel('webrtc');
+signaling.onmessage = e => {
+    console.log(e, e.data);
+    // if (!localStream) {
+    //     console.log('not ready yet');
+    //     return;
+    // }
+    switch (e.data.type) {
+        case 'offer':
+            handleOffer(e.data);
+            break;
+        case 'answer':
+            handleAnswer(e.data);
+            break;
+        case 'candidate':
+            handleCandidate(e.data);
+            break;
+        case 'ready':
+            // A second tab joined. This tab will initiate a call unless in a call already.
+            if (pc) {
+                console.log('already in call, ignoring');
+                return;
+            }
+            makeCall();
+            break;
+        case 'bye':
+            if (pc) {
+                hangup();
+            }
+            break;
+        default:
+            console.log('unhandled', e);
+            break;
+    }
+};
+
+async function makeCall() {
+    await createPeerConnection();
+
+    const offer = await pc.createOffer();
+    signaling.postMessage({ type: 'offer', sdp: offer.sdp });
+    await pc.setLocalDescription(offer);
+}
+
+async function handleOffer(offer) {
+    if (pc) {
+        console.error('existing peerconnection');
+        return;
+    }
+    await createPeerConnection();
+    await pc.setRemoteDescription(offer);
+
+    const answer = await pc.createAnswer();
+    signaling.postMessage({ type: 'answer', sdp: answer.sdp });
+    await pc.setLocalDescription(answer);
+}
+
+async function handleAnswer(answer) {
+    if (!pc) {
+        console.error('no peerconnection');
+        return;
+    }
+    await pc.setRemoteDescription(answer);
+}
+
+async function handleCandidate(candidate) {
+    if (!pc) {
+        console.error('no peerconnection');
+        return;
+    }
+    if (!candidate.candidate) {
+        await pc.addIceCandidate(null);
+    } else {
+        await pc.addIceCandidate(candidate);
+    }
+}
+
+function onSendChannelOpen() {
+    console.log('Send channel is open');
+
+    let chunkSize = Math.min(pc.sctp.maxMessageSize, MAX_CHUNK_SIZE);
+    console.log('Determined chunk size: ', chunkSize);
+
+    sendInterval = setInterval(async () => {
+        sendChannel.send(JSON.stringify(ObjectId));
+        sendCount++;
+        if (sendCount > 10) {
+            clearInterval(sendInterval);
+        }
+    }, 1000);
+    // startSendingData();
+}
+
+function onSendChannelClosed() {
+    console.log('Send channel is closed');
+    pc.close();
+    pc = null;
+
+}
+
+
+function onReceiveMessageCallback(event) {
+    console.log('Current Throughput is:', event.data.length, 'bytes/sec', event.data);
+
+    // Workaround for a bug in Chrome which prevents the closing event from being raised by the
+    // remote side. Also a workaround for Firefox which does not send all pending data when closing
+    // the channel.
+    // if (receiveProgress.value === receiveProgress.max) {
+    //     sendChannel.close();
+    //     receiveChannel.close();
+    // }
+}
+
+function onReceiveChannelClosed() {
+    console.log('Receive channel is closed');
+    pc.close();
+    pc = null;
+    console.log('Closed remote peer connection');
+    // maybeReset();
+}
+
+
+function receiveChannelCallback(event) {
+    console.log('Receive Channel Callback');
+    NetworkFoundResolve();
+    receiveChannel = event.channel;
+    receiveChannel.binaryType = 'arraybuffer';
+    // receiveChannel.addEventListener('close', onReceiveChannelClosed);
+    receiveChannel.addEventListener('message', onReceiveMessageCallback);
+}
+
+
+function createPeerConnection() {
+    pc = new RTCPeerConnection();
+    pc.onicecandidate = e => {
+        const message = {
+            type: 'candidate',
+            candidate: null,
+        };
+        if (e.candidate) {
+            message.candidate = e.candidate.candidate;
+            message.sdpMid = e.candidate.sdpMid;
+            message.sdpMLineIndex = e.candidate.sdpMLineIndex;
+        }
+        signaling.postMessage(message);
+    };
+    const dataChannelParams = { ordered: false };
+    pc.addEventListener('datachannel', receiveChannelCallback);
+    sendChannel = pc.createDataChannel('sendDataChannel', dataChannelParams);
+    sendChannel.addEventListener('open', onSendChannelOpen);
+    sendChannel.addEventListener('close', onSendChannelClosed);
+    console.log('Created send data channel: ', sendChannel);
+    // pc.ontrack = e => remoteVideo.srcObject = e.streams[0];
+    // localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+}
+
+async function ContactServer() {
     // git clone https://github.com/webrtc/samples.git
     // check the server to see if there are any active offers
     // if not
     //      create a RTCPeerConnection
-    //      set up listeners and createOffer then send that offer to the server 
+    //      set up listeners and createOffer then send that offer to the server
     //      wait for the server to send an answer arrives use it to setRemoteDescription
     // if there are active offers
     //      create a RTCPeerConnection
     //      set up listeners and setRemoteDescription based to the connection from the server
     //      create answer and send to Server
     // this should be duplicated to create 2 way communication
+    // localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+
+    WaitForNetwork = new Promise(function (resolve, reject) {
+        NetworkFoundResolve = resolve;
+        NetworkFoundReject = reject;
+    });
+    setTimeout(() => NetworkFoundReject(), 5000 )
+    signaling.postMessage({ type: 'ready' });
 }
 
-init().then(() => { ContactServer(); animate(); });
+ContactServer();
+WaitForNetwork.then(() =>{
+    init().then(() => { animate(); });
+})
 
 function createColoredWall(offset, rotation) {
     // floor
@@ -565,7 +737,7 @@ async function init() {
 
         matrix.setPosition(Math.floor(Math.random() * w - w_2) * w, Math.floor(Math.random() * w) * w + w_2, Math.floor(Math.random() * w - w_2) * w);
         boxes.setMatrixAt(i, matrix);
-         boxes.setColorAt(i, color.setHex(0xffffff * Math.random()));
+        boxes.setColorAt(i, color.setHex(0xffffff * Math.random()));
     }
 
     ObjectId = new ObjectIdentifier(objectTypes.box);

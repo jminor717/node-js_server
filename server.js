@@ -2,10 +2,13 @@
 const port = 8080
 //express.Router.call()
 //const app = express()
-var app = require('express')();
+var app = require('express')()
+const bodyParser = require('body-parser');
 app.listen(port, function () {
     console.log("Listening on " + port);
 });
+app.use(bodyParser.json());
+
 const parse = require('./byteParser.js')
 const WebSocket = require('ws');
 
@@ -112,7 +115,7 @@ wss.on("connection", function (socket) {
                 var datas = parse.frombytesnode(data)
                 // updates.push({ updates: data, sentTo: 1, time: new Date().getTime(), from: self.id })
                 if (scene == null) { return }
-                if (scene[datas.id] == null&&datas.helt!=null ) {
+                if (scene[datas.id] == null && datas.helt != null) {
                     scene[datas.id] = {
                         vel: datas.vel,
                         pos: datas.pos,
@@ -203,9 +206,11 @@ app.get("/cat", function (req, res) {
 
 app.get("/catData", function (req, res) {
     //console.log('static file request : ' + JSON.stringify(req.params));C:\repos\node-js_server\catBox.html
-    res.send({ FW1: Math.random(), FW2: Math.random(), FW3: Math.random(),
+    res.send({
+        FW1: Math.random(), FW2: Math.random(), FW3: Math.random(),
         RW1: Math.random(), RW2: Math.random(), RW3: Math.random(),
-        FT: Math.random(), RT: Math.random(), RD: Math.random() * 8000, FD: Math.random() * 8000})
+        FT: Math.random(), RT: Math.random(), RD: Math.random() * 8000, FD: Math.random() * 8000
+    })
 });
 
 app.get("/overrideON", function (req, res) {
@@ -251,9 +256,6 @@ app.get(/^(.+)$/, function (req, res) {
             // code block
         }
     }
-
-
-
 });
 
 
