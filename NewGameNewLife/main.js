@@ -458,11 +458,12 @@ function onSendChannelOpen() {
     console.log('Determined chunk size: ', chunkSize);
 
     sendInterval = setInterval(async () => {
-        sendChannel.send(JSON.stringify(ObjectId));
         sendCount++;
         if (sendCount > 10) {
             clearInterval(sendInterval);
+            return;
         }
+        sendChannel.send(JSON.stringify(ObjectId));
     }, 1000);
     // startSendingData();
 }
