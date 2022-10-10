@@ -3,6 +3,9 @@
 
 import * as THREE from 'three';
 
+import * as Objects from './CompressedObjects.js';
+import * as Network from './ApplicationLayer.js';
+
 import { PointerLockControls } from './Controls.js';
 // import { AmmoPhysics } from '../three.js/examples/jsm/physics/AmmoPhysics.js';
 import Stats from 'three/addons/libs/stats.module.js';
@@ -21,22 +24,36 @@ class callback_ContactCallback {
     endContact(c) {
         const Id1 = c._b1?.CustomProperties, Id2 = c._b2?.CustomProperties;
         if (Id1 && Id2) {
-            if ((Id1.ObjectType == objectTypes.box && (Id2.ObjectType == objectTypes.bullet || Id2.ObjectType == objectTypes.grenade || Id2.ObjectType == objectTypes.shrapnel))
-                || Id2.ObjectType == objectTypes.box && (Id1.ObjectType == objectTypes.bullet || Id1.ObjectType == objectTypes.grenade || Id1.ObjectType == objectTypes.shrapnel)) {
-                const O1 = physicsObjects[Id1.ID], O2 = physicsObjects[Id2.ID];
-                // console.log(Id1, Id2, O1, O2);
+            // if ((Id1.ObjectType == Objects.objectTypes.box && (Id2.ObjectType == Objects.objectTypes.bullet || Id2.ObjectType == Objects.objectTypes.grenade || Id2.ObjectType == Objects.objectTypes.shrapnel))
+            //     || Id2.ObjectType == Objects.objectTypes.box && (Id1.ObjectType == Objects.objectTypes.bullet || Id1.ObjectType == Objects.objectTypes.grenade || Id1.ObjectType == Objects.objectTypes.shrapnel)) {
+            const O1 = CollideAbleObjects[Id1.ID], O2 = CollideAbleObjects[Id2.ID];
+            // console.log(Id1, Id2, O1, O2);
 
-                if (O1) {
-                    O1.instanceColor.needsUpdate = true;
-                    O1.setColorAt(Id1.index, color.setHex(0xff0000));
-                    // console.log(Id1, Id2, O1.instanceColor, O2);
-                    // scene.add(O1);
+            if (NetworkedObjects[Id1.ID])
+                if (NetworkedObjects[Id1.ID][Id1.index]) {
+                    NetworkedObjects[Id1.ID][Id1.index].hasCollided = true;
                 }
-                if (Id2.ObjectType == objectTypes.grenade && O2) {
-                    DetonateGrenade(O2)
+            if (NetworkedObjects[Id2.ID])
+                if (NetworkedObjects[Id2.ID][Id2.index]) {
+                    NetworkedObjects[Id2.ID][Id2.index].hasCollided = true;
                 }
 
+            if (O1?.instanceColor) {
+                O1.instanceColor.needsUpdate = true;
+                O1.setColorAt(Id1.index, color.setHex(0xff0000));
             }
+            if (O2?.instanceColor) {
+                O2.instanceColor.needsUpdate = true;
+                O2.setColorAt(Id2.index, color.setHex(0xff0000));
+            }
+            if (Id2.ObjectType == Objects.objectTypes.grenade) {
+                DetonateGrenade(Id2.index)
+            }
+            if (Id1.ObjectType == Objects.objectTypes.grenade) {
+                DetonateGrenade(Id1.index)
+            }
+
+            // }
 
         }
 
@@ -116,17 +133,19 @@ class UserInputState {
 }
 
 class OffscreenStorage {
-    constructor(spacing, divisor, plane) {
+    constructor(spacing, divisor, plane, objectTyp) {
         this.spacing = spacing;
         this.divisor = divisor;
         this.storagePlane = plane;
+        this.objectType = objectTyp;
         this.modulus = 0b0;
         for (let i = 0; i < divisor; i++) {
             this.modulus = this.modulus | (0b1 << i);
         }
         this.currentIndex = 0;
-        this.meshes = [];
+        this.totalObjects = 0;
         this.SettlingTime = null;
+        this.instancedMesh;
     }
     offscreenPoint(index) {
         return new THREE.Vector3(
@@ -135,64 +154,67 @@ class OffscreenStorage {
             20 + (this.storagePlane) * this.spacing);
     }
     storeMesh(mesh) {
-        // scene.remove(mesh)
-        physics.setMeshPosition(mesh, this.offscreenPoint(this.currentIndex));
+        this.instancedMesh = mesh;
+        physics.setMeshPosition(mesh, this.offscreenPoint(this.currentIndex), this.currentIndex);
+        this.totalObjects++;
         this.currentIndex++;
-        this.meshes.push(mesh);
-        if (this.SettlingTime != null) {
-            clearTimeout(this.SettlingTime);
-        }
-        this.SettlingTime = setTimeout(() => this.settleQueue(), 1_000)
+
+        // if (this.SettlingTime != null) {
+        //     clearTimeout(this.SettlingTime);
+        // }
+        // this.SettlingTime = setTimeout(() => this.settleQueue(), 1_000)
     }
 
-    getLastMeshMesh() {
+    storeIndexedMesh(index) {
+        if (this.instancedMesh) {
+            let startingPosition = physics.getMeshPosition(this.instancedMesh, index);
+            physics.setMeshPosition(this.instancedMesh, this.offscreenPoint(index), index);
+            // this.currentIndex++;
+            return startingPosition;
+        }
+
+        // if (this.SettlingTime != null) {
+        //     clearTimeout(this.SettlingTime);
+        // }
+        // this.SettlingTime = setTimeout(() => this.settleQueue(), 1_000)
+    }
+
+    setLastMeshMeshPosAndVel(position, velocity) {
         this.currentIndex--;
-        return this.meshes.pop();
+        if (this.currentIndex < 0) {
+            this.currentIndex = this.totalObjects - 1;
+        }
+        physics.setMeshPosition(this.instancedMesh, position, this.currentIndex);
+        physics.setMeshVelocity(this.instancedMesh, velocity, this.currentIndex);
     }
 
     settleQueue() {
         // console.log("simmer down")
-        for (let i = 0; i < this.meshes.length; i++) {
-            const element = this.meshes[i];
-            physics.setMeshPosition(element, this.offscreenPoint(i));
+        for (let i = 0; i < this.totalObjects; i++) {
+            // physics.setMeshPosition(this.instancedMesh, this.offscreenPoint(i), this.currentIndex);
         }
         this.SettlingTime = null;
     }
 }
 
-const objectTypes = Object.freeze({
-    craft: 0,
-    box: 1,
-    wall: 2,
-    bullet: 3,
-    grenade: 4,
-    shrapnel: 5,
-});
-
-class ObjectIdentifier {
-    constructor(objectType, uuid = null) {
-        if (uuid === null) {
-            this.ID = Math.floor(Math.random() * Math.pow(2, 32))
-        } else {
-            this.ID = uuid;
-        }
-        this.ObjectType = objectType;
-        this.index = 0;
-    }
-}
-
 let camera, scene, renderer, controls, physics, stats;
 let craftPos;
-let ObjectId = new ObjectIdentifier();
-const defaultBulletStore = new OffscreenStorage(20, 8, 1);
-const shrapnelStore = new OffscreenStorage(20, 8, 2);
-const bombStore = new OffscreenStorage(20, 8, 3);
+let ObjectId = new Objects.ObjectIdentifier();
+const defaultBulletStore = new OffscreenStorage(20, 8, 1, Objects.objectTypes.bullet);
+const shrapnelStore = new OffscreenStorage(20, 8, 2, Objects.objectTypes.shrapnel);
+const bombStore = new OffscreenStorage(20, 8, 3, Objects.objectTypes.grenade);
+const ProjectileStores = {
+    0.5: shrapnelStore,
+    2: defaultBulletStore,
+    5: bombStore,
+}
+const GrenadeTimeouts = []
 
 const CollisionHandler = new callback_ContactCallback();
+const AimAbleObjects = [];
+const CollideAbleObjects = {};
 
-const objects = [];
-
-const physicsObjects = {};
+const NetworkedObjects = {};
 
 const friction = 1;
 const bulletMaterial = new THREE.MeshLambertMaterial();
@@ -200,10 +222,8 @@ const bulletMaterial = new THREE.MeshLambertMaterial();
 let UserInputs = new UserInputState(1);
 
 let prevTime = performance.now();
-const velocity = new THREE.Vector3();
+const myVelocity = new THREE.Vector3();
 const impartedImpulse = new THREE.Vector3();
-const vertex = new THREE.Vector3();
-const color = new THREE.Color();
 
 let craft = {};
 let craftProperties = {
@@ -219,22 +239,28 @@ let craftProperties = {
 }
 
 
-function removeMesh(mesh, BulletStore) {
-    BulletStore.storeMesh(mesh);
+function removeMesh(index, BulletStore) {
+    BulletStore.storeIndexedMesh(index);
 }
 
-function makeBullet(mass, inertia, speed, craftOffset, bulletMesh, ObjId) {
+function removeMeshes(Meshes, BulletStore) {
+    for (let key in Meshes) {
+        removeMesh(Meshes[key], BulletStore);
+    }
+}
+
+function makeBullet(mass, inertia, speed, craftOffset, objectStore) {
 
     let CurCraftPos = controls.getObject().position;
 
     let vector = new THREE.Vector3(0, 0, -1).applyQuaternion(craft.quaternion);
     let cameraRaycaster = new THREE.Raycaster(CurCraftPos, vector, 0, 1000);
 
-    const intersections = cameraRaycaster.intersectObjects(objects, false);
+    const intersections = cameraRaycaster.intersectObjects(AimAbleObjects, false);
 
     craftOffset.applyQuaternion(craft.quaternion);
     craftOffset.add(CurCraftPos);
-    bulletMesh.position.copy(craftOffset);
+    // bulletMesh.position.copy(craftOffset);
     let bulletVel = new THREE.Vector3(0, 0, -speed);
     if (intersections.length > 0) {
         bulletVel = intersections[0].point.clone().sub(craftOffset.clone()).normalize().multiplyScalar(speed)
@@ -242,79 +268,54 @@ function makeBullet(mass, inertia, speed, craftOffset, bulletMesh, ObjId) {
     else {
         bulletVel.applyQuaternion(craft.quaternion);
     }
-    bulletVel.add(velocity);
-
-    scene.add(bulletMesh);
-    physics.addMesh(bulletMesh, (mass), { CustomProperties: ObjId }, CollisionHandler);
-    physics.setVelocity(bulletMesh, bulletVel);
-
+    bulletVel.add(myVelocity);
+    objectStore.setLastMeshMeshPosAndVel(craftOffset, bulletVel);
     impartedImpulse.add(bulletVel.multiplyScalar(inertia / craft.inertia));
+
+    return objectStore.currentIndex;
 }
 
 function single(mass, inertia, speed, range) {
-    let bulletMesh;
-    if (defaultBulletStore.currentIndex > 0) {
-        bulletMesh = defaultBulletStore.getLastMeshMesh()
-    }
-    else {
-        const bulletGeometry = new THREE.IcosahedronGeometry(2, 1);//.toNonIndexed();
-        bulletMesh = new THREE.Mesh(bulletGeometry, bulletMaterial);
-    }
-
     let craftOffset = craft.gunPositions[craft.currentGunIndex].clone();
     craft.currentGunIndex++;
     craft.currentGunIndex = craft.currentGunIndex % craft.gunPositions.length;
 
-    ObjectId = new ObjectIdentifier(objectTypes.bullet);
-    makeBullet(mass, inertia, speed, craftOffset, bulletMesh, ObjectId)
+    let instancedIndex = makeBullet(mass, inertia, speed, craftOffset, defaultBulletStore)
 
     let time = (range / speed) * 1000
-    setTimeout(removeMesh.bind(null, bulletMesh, defaultBulletStore), time);
+    setTimeout(removeMesh.bind(null, instancedIndex, defaultBulletStore), time);
 }
 
-function DetonateGrenade(box) {
-    if (box.timeOut) {
-        clearTimeout(box.timeOut)
-        box.timeOut = null;
-        if (box.parent === scene) {
-            bombStore.storeMesh(box)
-            console.log("ekusplotion", box.position)
-            explosion(box.position, 300, box.mass * 900);
-        }
+function DetonateGrenade(index) {
+    let timeOut = GrenadeTimeouts[index]
+    if (timeOut) {
+        clearTimeout(timeOut)
+        GrenadeTimeouts[index] = null;
+        let pos = bombStore.storeIndexedMesh(index)
+        console.log("ekusplotion", index, pos)
+        explosion(pos, 300, 900); //box.mass * 
     }
 }
 
 function grenade(mass, inertia, speed, range) {
-    const bulletGeometry = new THREE.IcosahedronGeometry(5, 1);//.toNonIndexed();
-    let bulletMesh = new THREE.Mesh(bulletGeometry, bulletMaterial);
-
-    ObjectId = new ObjectIdentifier(objectTypes.grenade);
-    makeBullet(mass, inertia, speed, new THREE.Vector3(0, 0, -10), bulletMesh, ObjectId)
-
+    let instancedIndex = makeBullet(mass, inertia, speed, new THREE.Vector3(0, 0, -15), bombStore)
     let time = (range / speed) * 1000;
-    bulletMesh.mass = mass;
-    bulletMesh.timeOut = setTimeout(DetonateGrenade.bind(null, bulletMesh), time);
-    physicsObjects[ObjectId.ID] = bulletMesh;
+    GrenadeTimeouts[instancedIndex] = setTimeout(DetonateGrenade.bind(null, instancedIndex), time);
 }
 
 function explosion(center, numObjects, totalMass) {
     let time = (150 / 300) * 1000
     let shrapnelMeshes = []
-    let shrapnel = new THREE.IcosahedronGeometry(0.5, 1);
     for (let i = 0; i < numObjects; i++) {
         let offset = new THREE.Vector3((Math.random() * 10) - 5, (Math.random() * 10) - 5, (Math.random() * 10) - 5)
         let position = new THREE.Vector3(center.x + offset.x, center.y + offset.y, center.z + offset.z)
         let shrapnelVelocity = position.clone().sub(center).normalize().multiplyScalar(400)
-        shrapnelVelocity.add(velocity);
-        let shrapnelMesh = new THREE.Mesh(shrapnel, bulletMaterial);
-        shrapnelMesh.position.copy(position);
-        scene.add(shrapnelMesh);
-        physics.addMesh(shrapnelMesh, totalMass / numObjects, { CustomProperties: new ObjectIdentifier(objectTypes.shrapnel) }, CollisionHandler);
-        physics.setVelocity(shrapnelMesh, shrapnelVelocity);
-        shrapnelMeshes.push(shrapnelMesh)
+        shrapnelVelocity.add(myVelocity);
+
+        shrapnelStore.setLastMeshMeshPosAndVel(position, shrapnelVelocity);
+        shrapnelMeshes.push(shrapnelStore.currentIndex)
     }
-    setTimeout(removeShrapnel.bind(null, shrapnelMeshes), time);
-    function removeShrapnel(shrapnelMeshes) { for (let key in shrapnelMeshes) { removeMesh(shrapnelMeshes[key], shrapnelStore) /*scene.remove(boxes[key])*/ } }
+    setTimeout(removeMeshes.bind(null, shrapnelMeshes, shrapnelStore), time);
 }
 
 function shotgun(totalMass, inertia, speed, range, pellets) {
@@ -338,29 +339,16 @@ function shotgun(totalMass, inertia, speed, range, pellets) {
         let bulletVel = new THREE.Vector3(0, 0, -speed);
         bulletVel.applyQuaternion(craft.quaternion);
         centerVelocity = bulletVel.clone()
-        bulletVel.add(velocity).add(randSpread.clone().multiplyScalar(20));
+        bulletVel.add(myVelocity).add(randSpread.clone().multiplyScalar(20));
 
-        let bulletMesh;
-        if (shrapnelStore.currentIndex > 0) {
-            bulletMesh = shrapnelStore.getLastMeshMesh()
-        }
-        else {
-            const bulletGeometry = new THREE.IcosahedronGeometry(0.5, 1);//.toNonIndexed();
-            bulletMesh = new THREE.Mesh(bulletGeometry, bulletMaterial);
-        }
-
-        bulletMesh.position.copy(craftOffset);
-        scene.add(bulletMesh);
-        physics.addMesh(bulletMesh, (totalMass) / pellets, { CustomProperties: new ObjectIdentifier(objectTypes.bullet) }, CollisionHandler);
-        physics.setVelocity(bulletMesh, bulletVel);
-        pelletMeshes.push(bulletMesh)
+        shrapnelStore.setLastMeshMeshPosAndVel(craftOffset, bulletVel);
+        pelletMeshes.push(shrapnelStore.currentIndex)
     }
 
     impartedImpulse.add(centerVelocity.multiplyScalar(inertia / craft.inertia));
 
     let time = (range / speed) * 1000
-    setTimeout(removePellets.bind(null, pelletMeshes), time);
-    function removePellets(Meshes) { for (let key in Meshes) { removeMesh(Meshes[key], shrapnelStore) /*scene.remove(boxes[key])*/ } }
+    setTimeout(removeMeshes.bind(null, pelletMeshes, shrapnelStore), time);
 }
 
 function onDocumentMousedown(event) {
@@ -369,197 +357,22 @@ function onDocumentMousedown(event) {
     if (event.button == 2) { shotgun(300, 0.3, 150, 200, 20) }
 }
 
-let pc;
-let sendChannel, receiveChannel, sendCount = 0, sendInterval;
-const MAX_CHUNK_SIZE = 262144;
-let WaitForNetwork, NetworkFoundResolve, NetworkFoundReject; 
-
-const signaling = new BroadcastChannel('webrtc');
-signaling.onmessage = e => {
-    console.log(e, e.data);
-    // if (!localStream) {
-    //     console.log('not ready yet');
-    //     return;
-    // }
-    switch (e.data.type) {
-        case 'offer':
-            handleOffer(e.data);
-            break;
-        case 'answer':
-            handleAnswer(e.data);
-            break;
-        case 'candidate':
-            handleCandidate(e.data);
-            break;
-        case 'ready':
-            // A second tab joined. This tab will initiate a call unless in a call already.
-            if (pc) {
-                console.log('already in call, ignoring');
-                return;
-            }
-            makeCall();
-            break;
-        case 'bye':
-            if (pc) {
-                hangup();
-            }
-            break;
-        default:
-            console.log('unhandled', e);
-            break;
-    }
-};
-
-async function makeCall() {
-    await createPeerConnection();
-
-    const offer = await pc.createOffer();
-    signaling.postMessage({ type: 'offer', sdp: offer.sdp });
-    await pc.setLocalDescription(offer);
-}
-
-async function handleOffer(offer) {
-    if (pc) {
-        console.error('existing peerconnection');
-        return;
-    }
-    await createPeerConnection();
-    await pc.setRemoteDescription(offer);
-
-    const answer = await pc.createAnswer();
-    signaling.postMessage({ type: 'answer', sdp: answer.sdp });
-    await pc.setLocalDescription(answer);
-}
-
-async function handleAnswer(answer) {
-    if (!pc) {
-        console.error('no peerconnection');
-        return;
-    }
-    await pc.setRemoteDescription(answer);
-}
-
-async function handleCandidate(candidate) {
-    if (!pc) {
-        console.error('no peerconnection');
-        return;
-    }
-    if (!candidate.candidate) {
-        await pc.addIceCandidate(null);
-    } else {
-        await pc.addIceCandidate(candidate);
-    }
-}
-
-function onSendChannelOpen() {
-    console.log('Send channel is open');
-
-    let chunkSize = Math.min(pc.sctp.maxMessageSize, MAX_CHUNK_SIZE);
-    console.log('Determined chunk size: ', chunkSize);
-
-    sendInterval = setInterval(async () => {
-        sendCount++;
-        if (sendCount > 10) {
-            clearInterval(sendInterval);
-            return;
-        }
-        sendChannel.send(JSON.stringify(ObjectId));
-    }, 1000);
-    // startSendingData();
-}
-
-function onSendChannelClosed() {
-    console.log('Send channel is closed');
-    pc.close();
-    pc = null;
-
-}
 
 
-function onReceiveMessageCallback(event) {
-    console.log('Current Throughput is:', event.data.length, 'bytes/sec', event.data);
-
-    // Workaround for a bug in Chrome which prevents the closing event from being raised by the
-    // remote side. Also a workaround for Firefox which does not send all pending data when closing
-    // the channel.
-    // if (receiveProgress.value === receiveProgress.max) {
-    //     sendChannel.close();
-    //     receiveChannel.close();
-    // }
-}
-
-function onReceiveChannelClosed() {
-    console.log('Receive channel is closed');
-    pc.close();
-    pc = null;
-    console.log('Closed remote peer connection');
-    // maybeReset();
-}
-
-
-function receiveChannelCallback(event) {
-    console.log('Receive Channel Callback');
-    NetworkFoundResolve();
-    receiveChannel = event.channel;
-    receiveChannel.binaryType = 'arraybuffer';
-    // receiveChannel.addEventListener('close', onReceiveChannelClosed);
-    receiveChannel.addEventListener('message', onReceiveMessageCallback);
-}
-
-
-function createPeerConnection() {
-    pc = new RTCPeerConnection();
-    pc.onicecandidate = e => {
-        const message = {
-            type: 'candidate',
-            candidate: null,
-        };
-        if (e.candidate) {
-            message.candidate = e.candidate.candidate;
-            message.sdpMid = e.candidate.sdpMid;
-            message.sdpMLineIndex = e.candidate.sdpMLineIndex;
-        }
-        signaling.postMessage(message);
-    };
-    const dataChannelParams = { ordered: false };
-    pc.addEventListener('datachannel', receiveChannelCallback);
-    sendChannel = pc.createDataChannel('sendDataChannel', dataChannelParams);
-    sendChannel.addEventListener('open', onSendChannelOpen);
-    sendChannel.addEventListener('close', onSendChannelClosed);
-    console.log('Created send data channel: ', sendChannel);
-    // pc.ontrack = e => remoteVideo.srcObject = e.streams[0];
-    // localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
-}
-
-async function ContactServer() {
-    // git clone https://github.com/webrtc/samples.git
-    // check the server to see if there are any active offers
-    // if not
-    //      create a RTCPeerConnection
-    //      set up listeners and createOffer then send that offer to the server
-    //      wait for the server to send an answer arrives use it to setRemoteDescription
-    // if there are active offers
-    //      create a RTCPeerConnection
-    //      set up listeners and setRemoteDescription based to the connection from the server
-    //      create answer and send to Server
-    // this should be duplicated to create 2 way communication
-    // localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
-
-    WaitForNetwork = new Promise(function (resolve, reject) {
-        NetworkFoundResolve = resolve;
-        NetworkFoundReject = reject;
-    });
-    setTimeout(() => NetworkFoundReject(), 5000 )
-    signaling.postMessage({ type: 'ready' });
-}
-
-ContactServer();
-WaitForNetwork.then(() =>{
-    init().then(() => { animate(); });
+Network.WaitForConnection().then((dat) => {
+    init(dat).then(() => { animate(); });
+}).catch((err) => {
+    console.log(err);
+    init(null).then(() => { animate(); });
 })
+
+const color = new THREE.Color();
+
 
 function createColoredWall(offset, rotation) {
     // floor
+    const vertex = new THREE.Vector3();
+
     let floorGeometry = new THREE.PlaneGeometry(2000, 2000, 100, 100);
     floorGeometry.rotateX(- Math.PI / 2);
 
@@ -599,7 +412,7 @@ function createColoredWall(offset, rotation) {
     floor.receiveShadow = true;
     scene.add(floor);
     // physics.addMesh(floor);
-    objects.push(floor);
+    AimAbleObjects.push(floor);
 }
 
 function CreateWall(boxSize, offset) {
@@ -615,15 +428,34 @@ function CreateWall(boxSize, offset) {
         physicalFloor.position.z = offset.z;
     //physicalFloor.receiveShadow = true;
     scene.add(physicalFloor);
-    physics.addMesh(physicalFloor, 0, { CustomProperties: new ObjectIdentifier(objectTypes.wall) });
+    physics.addMesh(physicalFloor, 0, { CustomProperties: new Objects.ObjectIdentifier(Objects.objectTypes.wall) });
 }
 
-async function init() {
+function CreateProjectiles(radius, numObjects, mass) {
+    const geometry = new THREE.IcosahedronGeometry(radius, 1);
+
+    let bullets = new THREE.InstancedMesh(geometry, bulletMaterial, numObjects);
+    bullets.instanceMatrix.setUsage(THREE.DynamicDrawUsage); // will be updated every frame
+    // boxes.castShadow = true;
+    // boxes.receiveShadow = true;
+    // objects.push(boxes);
+
+    ObjectId = new Objects.ObjectIdentifier(ProjectileStores[radius].objectType);
+    CollideAbleObjects[ObjectId.ID] = bullets;
+    if (radius > 3) {
+        AimAbleObjects.push(bullets)
+    }
+    scene.add(bullets);
+    physics.addMesh(bullets, mass, { CustomProperties: ObjectId }, CollisionHandler);
+
+    for (let i = 0; i < bullets.count; i++) {
+        ProjectileStores[radius].storeMesh(bullets)
+    }
+}
+
+async function init(PeerBoxes) {
 
     physics = await OimoPhysics(0);
-    // physics = await AmmoPhysics(THREE);
-    // physics.setGravity(0, 0, 0);
-
     craftPos = new THREE.Vector3();
 
     scene = new THREE.Scene();
@@ -643,12 +475,16 @@ async function init() {
     //physics.addMesh(craftMesh, 1);
     craft = camera.clone();
     craft = Object.assign(craft, craftProperties);
+    craft.add(craftMesh);
 
-    // camera.position
     // Object.assign(craft, craftMesh);
     // Object.assign(craft, camera);
-    craft.add(craftMesh);
-    physics.addMesh(craft.children[0], craft.mass, { CustomProperties: new ObjectIdentifier(objectTypes.craft) });
+    ObjectId = new Objects.ObjectIdentifier(Objects.objectTypes.craft)
+    // NetworkedObjects[ObjectId.ID] = {}
+    // NetworkedObjects[ObjectId.ID].isInstanced = false;
+    // NetworkedObjects[ObjectId.ID][0] = new Objects.Craft(craft.position)
+
+    physics.addMesh(craft.children[0], craft.mass, { CustomProperties: ObjectId });
     scene.add(craft);
 
     const ambientLight = new THREE.AmbientLight(0x404040);
@@ -670,8 +506,8 @@ async function init() {
     bulbLight.castShadow = true;
     scene.add(bulbLight);
     scene.add(bulbMesh);
-    physics.addMesh(bulbMesh, 0, { CustomProperties: new ObjectIdentifier(objectTypes.box) });
-    objects.push(bulbMesh);
+    physics.addMesh(bulbMesh, 0, { CustomProperties: new Objects.ObjectIdentifier(Objects.objectTypes.box) });
+    AimAbleObjects.push(bulbMesh);
 
     controls = new PointerLockControls(craft, document.body);
 
@@ -710,43 +546,60 @@ async function init() {
     CreateWall({ x: 2000, y: 2000, z: 2 }, { z: -598 })
     CreateWall({ x: 2000, y: 2000, z: 2 }, { z: 598 })
 
+    CreateProjectiles(2, 500, 1);
+    CreateProjectiles(5, 100, 1);
+    CreateProjectiles(0.5, 3000, 15);
+
     // Boxes
     const geometryBox = new THREE.BoxGeometry(20, 20, 20);
     const material = new THREE.MeshLambertMaterial();
     const matrix = new THREE.Matrix4();
-    // position = geometryBox.attributes.position;
-    // const BoxColors = [];
-
-    // for (let i = 0, l = position.count; i < l; i++) {
-
-    //     color.setHSL(Math.random() * 0.3 + 0.5, 0.75, Math.random() * 0.25 + 0.75);
-    //     BoxColors.push(color.r, color.g, color.b);
-
-    // }
-
-    // geometryBox.setAttribute('color', new THREE.Float32BufferAttribute(BoxColors, 3));
 
     let boxes = new THREE.InstancedMesh(geometryBox, material, 900);
     boxes.instanceMatrix.setUsage(THREE.DynamicDrawUsage); // will be updated every frame
     boxes.castShadow = true;
     boxes.receiveShadow = true;
     scene.add(boxes);
-    objects.push(boxes);
+    AimAbleObjects.push(boxes);
     let w = 30, w_2 = 15;
 
-    for (let i = 0; i < boxes.count; i++) {
-
-        matrix.setPosition(Math.floor(Math.random() * w - w_2) * w, Math.floor(Math.random() * w) * w + w_2, Math.floor(Math.random() * w - w_2) * w);
-        boxes.setMatrixAt(i, matrix);
-        boxes.setColorAt(i, color.setHex(0xffffff * Math.random()));
+    let UUID = null
+    if (PeerBoxes) {
+        let keys = Object.keys(PeerBoxes)
+        let numberArray = [];
+        for (var i = 0; i < keys.length; i++)
+            numberArray.push(parseInt(keys[i]));
+        UUID = Math.min(...numberArray);
     }
 
-    ObjectId = new ObjectIdentifier(objectTypes.box);
-    physicsObjects[ObjectId.ID] = boxes;
+    for (let i = 0; i < boxes.count; i++) {
+        if (PeerBoxes) {
+            matrix.setPosition(PeerBoxes[UUID][i].pos.x, PeerBoxes[UUID][i].pos.y, PeerBoxes[UUID][i].pos.z);
+            boxes.setMatrixAt(i, matrix);
+            boxes.setColorAt(i, color.setHex(0xffffff * Math.random()));
+        } else {
+            matrix.setPosition(Math.floor(Math.random() * w - w_2) * w, Math.floor(Math.random() * w) * w + w_2, Math.floor(Math.random() * w - w_2) * w);
+            boxes.setMatrixAt(i, matrix);
+            boxes.setColorAt(i, color.setHex(0xffffff * Math.random()));
+        }
+    }
+
+    ObjectId = new Objects.ObjectIdentifier(Objects.objectTypes.box, UUID);
+    CollideAbleObjects[ObjectId.ID] = boxes;
     physics.addMesh(boxes, 0.1, { CustomProperties: ObjectId });
 
+    NetworkedObjects[ObjectId.ID] = {}
+    // NetworkedObjects[ObjectId.ID].isInstanced = true;
+    for (let i = 0; i < boxes.count; i++) {
+        if (PeerBoxes) {
+            //  console.log(PeerBoxes[UUID][i])
+            physics.setMeshProperties(boxes, PeerBoxes[UUID][i], i)
+        }
+        ObjectId.index = i;
+        NetworkedObjects[ObjectId.ID][ObjectId.index] = new Objects.InstancedCube(physics.getMeshProperties(boxes, i), ObjectId);
+    }
 
-    console.log(craft)
+    console.log(craft, NetworkedObjects)
 
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setPixelRatio(window.devicePixelRatio);
@@ -760,6 +613,8 @@ async function init() {
 
     window.addEventListener('resize', onWindowResize);
 
+    // Network.QueueObjectToSend({ cmd: "sendState", data: NetworkedObjects });
+    Network.SetFullStateObject(NetworkedObjects);
 
 }
 
@@ -779,10 +634,10 @@ function animate() {
 
     const time = performance.now();
 
-    let internalVelocity = physics.getVelocity(craft.children[0]);
+    let internalVelocity = physics.getMeshVelocity(craft.children[0]);
     const simVelocity = new THREE.Vector3(internalVelocity.x, internalVelocity.y, internalVelocity.z);
     if (simVelocity.length() === 0) {
-        simVelocity.set(velocity.x, velocity.y, velocity.z)
+        simVelocity.set(myVelocity.x, myVelocity.y, myVelocity.z)
     }
     let tmpmove = new THREE.Vector3(0, 0, 0);
 
@@ -796,26 +651,26 @@ function animate() {
         if (UserInputs.moveUp) tmpmove.y += 0.5;
         if (UserInputs.moveDown) tmpmove.y -= 0.5;
         if (UserInputs.activeDecelerate) {
-            if (Math.abs(velocity.x) > 1) if (velocity.x < 0) tmpmove.x += .5; else tmpmove.x += -.5;
-            if (Math.abs(velocity.y) > 1) if (velocity.y < 0) tmpmove.y += .5; else tmpmove.y += -.5;
-            if (Math.abs(velocity.z) > 1) if (velocity.z < 0) tmpmove.z += 1; else tmpmove.z += -1;
+            if (Math.abs(myVelocity.x) > 1) if (myVelocity.x < 0) tmpmove.x += .5; else tmpmove.x += -.5;
+            if (Math.abs(myVelocity.y) > 1) if (myVelocity.y < 0) tmpmove.y += .5; else tmpmove.y += -.5;
+            if (Math.abs(myVelocity.z) > 1) if (myVelocity.z < 0) tmpmove.z += 1; else tmpmove.z += -1;
         }
 
         tmpmove.applyQuaternion(craft.quaternion);
     }
     tmpmove.add(simVelocity);
-    velocity.set(tmpmove.x, tmpmove.y, tmpmove.z);
-    velocity.sub(impartedImpulse);
+    myVelocity.set(tmpmove.x, tmpmove.y, tmpmove.z);
+    myVelocity.sub(impartedImpulse);
     impartedImpulse.setLength(0);
     // console.log(simVelocity.length(), velocity.length() );
 
     const delta = (time - prevTime) / 1000;
 
-    if (velocity.length() < 5 && UserInputs.AnyActiveDirectionalInputs() != true) {
+    if (myVelocity.length() < 5 && UserInputs.AnyActiveDirectionalInputs() != true) {
         // console.log(UserInputs.AnyActiveDirectionalInputs())
-        velocity.x -= velocity.x * friction * delta;
-        velocity.y -= velocity.y * friction * delta;
-        velocity.z -= velocity.z * friction * delta;
+        myVelocity.x -= myVelocity.x * friction * delta;
+        myVelocity.y -= myVelocity.y * friction * delta;
+        myVelocity.z -= myVelocity.z * friction * delta;
     }
 
     // controls.moveRight(- velocity.x * delta);
@@ -823,26 +678,42 @@ function animate() {
     // console.log(3, controls.getObject());
     let camPosition = controls.getObject().position;
 
-    camPosition.x += (velocity.x * delta);
-    camPosition.y += (velocity.y * delta);
-    camPosition.z += (velocity.z * delta);
+    camPosition.x += (myVelocity.x * delta);
+    camPosition.y += (myVelocity.y * delta);
+    camPosition.z += (myVelocity.z * delta);
 
     craftPos.set(camPosition.x, camPosition.y, camPosition.z);
     physics.setMeshPosition(craft.children[0], craftPos);
-    physics.setVelocity(craft.children[0], velocity);
+    physics.setMeshVelocity(craft.children[0], myVelocity);
     craft.children[0].position.x = craftPos.x / 200;
     craft.children[0].position.y = craftPos.y / 200;
     craft.children[0].position.z = craftPos.z / 200;
 
 
 
-    // if(time % 2 == 0 ){
-    //     console.log(camPosition.x, camPosition.y, camPosition.z)
-    // }
+    for (const key in NetworkedObjects) {
+        // if (Object.hasOwnProperty.call(NetworkedObjects, key)) {
+        const object = NetworkedObjects[key];
+        // if (object.isInstanced) {
+        for (const index in object) {
+            // if (Object.hasOwnProperty.call(object, index)) {
+            const element = object[index];
+            if (element.hasCollided) {
+                let prop = physics.getMeshProperties(CollideAbleObjects[key], index)
+                element.pos = prop.pos;
+                element.vel = prop.vel;
+                element.rot = prop.rot;
+                element.rotVel = prop.rotVel;
+            }
+            // }
+        }
+        // }
+        // }
+    }
+
 
     prevTime = time;
 
     renderer.render(scene, craft);
     stats.update();
-
 }
