@@ -195,17 +195,20 @@ async function OimoPhysics(gravity) {
 		if (mesh.isInstancedMesh) {
 			const bodies = meshMap.get(mesh);
 			const body = bodies[index];
-			
+
 			body.setRotationXyz({ x: object.rot.x, y: object.rot.y, z: object.rot.z, w: object.rot.w });
 			body.setPosition(new OIMO.Vec3(object.pos.x, object.pos.y, object.pos.z));
 			body.setLinearVelocity(new OIMO.Vec3(object.vel.x, object.vel.y, object.vel.z));
-			body.setAngularVelocity(new OIMO.Vec3(object.rotVel.x, object.rotVel.y, object.rotVel.z));
+			if (object.rotVel != null)
+				body.setAngularVelocity(new OIMO.Vec3(object.rotVel.x, object.rotVel.y, object.rotVel.z));
+
 		} else if (mesh.isMesh) {
 			const body = meshMap.get(mesh);
 			body.setPosition(new OIMO.Vec3(object.pos.x, object.pos.y, object.pos.z));
 			body.setLinearVelocity(new OIMO.Vec3(object.vel.x, object.vel.y, object.vel.z));
 			body.setOrientation({ x: object.rot.x, y: object.rot.y, z: object.rot.z, w: object.rot.w });
-			body.setAngularVelocity(new OIMO.Vec3(object.rotVel.x, object.rotVel.y, object.rotVel.z));
+			if (object.rotVel != null)
+				body.setAngularVelocity(new OIMO.Vec3(object.rotVel.x, object.rotVel.y, object.rotVel.z));
 		}
 	}
 	//

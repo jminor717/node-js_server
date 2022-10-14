@@ -4,9 +4,11 @@ import * as Objects from './CompressedObjects.js';
 let SendQueue = []
 let NetworkResolve, NetworkReject;
 let FullState = null;
+let StateReceivedCallBack = null;
 
 function GenerateNetworkPacket(networkObjects) {
     let data = [];
+    // console.log(networkObjects);
     for (const key in networkObjects) {
         const object = networkObjects[key];
         for (const index in object) {
@@ -26,16 +28,18 @@ function GenerateStateFromBuffer(buffer) {
         offset += ((obj.ArrayLength + 1) * 4);
         if (output[obj.ID.ID] === null || output[obj.ID.ID] === undefined) {
             output[obj.ID.ID] = {}
+            output[obj.ID.ID].ObjectType = obj.ID.ObjectType
         }
         output[obj.ID.ID][obj.ID.index] = obj;
-        // console.log(output[obj.ID.ID]);
+        // console.log(output[obj.ID.ID][obj.ID.index], offset);
         // objects.push(obj);
     }
+    // console.log(output)
     return output;
 }
 
 function FlushSendQueue() {
-    console.log("sending", SendQueue)
+    // console.log("sending", SendQueue)
 
     while (SendQueue.length > 0) {
         llNetwork.sendData(SendQueue.pop())
@@ -48,8 +52,16 @@ function isAbv(value) {
 
 function receiveData(event) {
     if (isAbv(event.data)) {
-        console.log('received ArrayBuffer:', event.data.byteLength, ' bytes');
-        NetworkResolve(GenerateStateFromBuffer(event.data));
+        // console.log('received ArrayBuffer:', event.data.byteLength, ' bytes');
+        let stuff = GenerateStateFromBuffer(event.data);
+        // console.log(NetworkResolve, stuff)
+        if (event.data.byteLength > 1000){
+            NetworkResolve(stuff);
+        }
+        if (StateReceivedCallBack) {
+            StateReceivedCallBack(stuff)
+        }
+
         
     } else {
         console.log('received:', event.data.length, ' bytes');
@@ -98,8 +110,8 @@ async function WaitForConnection() {
 }
 
 function QueueObjectToSend(obj) {
-    SendQueue.push(JSON.stringify(obj))
-    console.log("Que_ing", llNetwork.ReadyToSend, SendQueue)
+    SendQueue.push(Float32Array.from(GenerateNetworkPacket(obj)).buffer)
+    // console.log("Que_ing", llNetwork.ReadyToSend, SendQueue)
     if (llNetwork.ReadyToSend) {
         FlushSendQueue();
     }
@@ -111,7 +123,10 @@ function SetFullStateObject(obj) {
     // let data = GenerateNetworkPacket(FullState)
     // var view = Float32Array.from(data);
     // console.log(FullState, GenerateStateFromBuffer(view.buffer));
-
 }
 
-export { WaitForConnection, QueueObjectToSend, SetFullStateObject }
+function SetUpdatePacketCallback(cb){
+    StateReceivedCallBack = cb;
+}
+
+export { WaitForConnection, QueueObjectToSend, SetFullStateObject, SetUpdatePacketCallback }
