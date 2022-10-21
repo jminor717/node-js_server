@@ -13,7 +13,8 @@ import { OimoPhysics } from 'components/OimoPhysics.js';
 
 
 class callback_ContactCallback {
-    constructor() {
+    constructor(numUpdates) {
+        this.updatesPerCollision = numUpdates;
     }
     beginContact(c) {
     }
@@ -32,12 +33,12 @@ class callback_ContactCallback {
             if (NetworkedObjects[Id1.ID])
                 if (NetworkedObjects[Id1.ID][Id1.index]) {
                     NetworkedObjects[Id1.ID][Id1.index].hasCollided = true;
-                    NetworkedObjects[Id2.ID][Id2.index].NeedsUpdated = true;
+                    NetworkedObjects[Id2.ID][Id2.index].NeedsUpdated = this.updatesPerCollision;
                 }
             if (NetworkedObjects[Id2.ID])
                 if (NetworkedObjects[Id2.ID][Id2.index]) {
                     NetworkedObjects[Id2.ID][Id2.index].hasCollided = true;
-                    NetworkedObjects[Id2.ID][Id2.index].NeedsUpdated = true;
+                    NetworkedObjects[Id2.ID][Id2.index].NeedsUpdated = this.updatesPerCollision;
                 }
 
             if (O1?.instanceColor) {
@@ -58,7 +59,7 @@ class callback_ContactCallback {
             // }
 
         }
-        else{
+        else {
             console.log(c._b1, c._b2)
         }
 
@@ -151,6 +152,7 @@ class OffscreenStorage {
         this.totalObjects = 0;
         this.SettlingTime = null;
         this.instancedMesh;
+        this.instanceID = 0;
     }
     offscreenPoint(index) {
         return new THREE.Vector3(
@@ -158,11 +160,12 @@ class OffscreenStorage {
             20 + ((index >> this.divisor) * this.spacing),
             20 + (this.storagePlane) * this.spacing);
     }
-    storeMesh(mesh) {
+    storeMesh(mesh, id) {
         this.instancedMesh = mesh;
         physics.setMeshPosition(mesh, this.offscreenPoint(this.currentIndex), this.currentIndex);
         this.totalObjects++;
         this.currentIndex++;
+        this.instanceID = id;
 
         // if (this.SettlingTime != null) {
         //     clearTimeout(this.SettlingTime);
@@ -174,6 +177,7 @@ class OffscreenStorage {
         if (this.instancedMesh) {
             let startingPosition = physics.getMeshPosition(this.instancedMesh, index);
             physics.setMeshPosition(this.instancedMesh, this.offscreenPoint(index), index);
+            NetworkedObjects[this.instanceID][this.currentIndex].NeedsUpdated = 1;
             // this.currentIndex++;
             return startingPosition;
         }
@@ -191,6 +195,8 @@ class OffscreenStorage {
         }
         physics.setMeshPosition(this.instancedMesh, position, this.currentIndex);
         physics.setMeshVelocity(this.instancedMesh, velocity, this.currentIndex);
+        NetworkedObjects[this.instanceID][this.currentIndex].NeedsUpdated = 5;
+
     }
 
     settleQueue() {
@@ -215,7 +221,7 @@ const ProjectileStores = {
 }
 const GrenadeTimeouts = []
 
-const CollisionHandler = new callback_ContactCallback();
+const CollisionHandler = new callback_ContactCallback(Network.IsServer ? 2 : 0);
 const AimAbleObjects = [];
 const CollideAbleObjects = {};
 
@@ -276,7 +282,7 @@ function makeBullet(mass, inertia, speed, craftOffset, objectStore) {
     bulletVel.add(myVelocity);
     objectStore.setLastMeshMeshPosAndVel(craftOffset, bulletVel);
     impartedImpulse.add(bulletVel.multiplyScalar(inertia / craft.inertia));
-
+    
     return objectStore.currentIndex;
 }
 
@@ -436,7 +442,7 @@ function CreateWall(boxSize, offset) {
     physics.addMesh(physicalFloor, 0, { CustomProperties: new Objects.ObjectIdentifier(Objects.objectTypes.wall) });
 }
 
-function CreateProjectiles(radius, numObjects, mass) {
+function CreateProjectiles(radius, numObjects, mass, PeerBoxes) {
     const geometry = new THREE.IcosahedronGeometry(radius, 1);
 
     let bullets = new THREE.InstancedMesh(geometry, bulletMaterial, numObjects);
@@ -445,7 +451,18 @@ function CreateProjectiles(radius, numObjects, mass) {
     // boxes.receiveShadow = true;
     // objects.push(boxes);
 
-    ObjectId = new Objects.ObjectIdentifier(ProjectileStores[radius].objectType);
+    let UUID = null
+    if (PeerBoxes) {
+        for (const key in PeerBoxes) {
+            const object = PeerBoxes[key];
+            if (object.ObjectType == ProjectileStores[radius].objectType) {
+                UUID = object[0].ID.ID
+                break;
+            }
+        }
+    }
+
+    ObjectId = new Objects.ObjectIdentifier(ProjectileStores[radius].objectType, UUID);
     CollideAbleObjects[ObjectId.ID] = bullets;
     if (radius > 3) {
         AimAbleObjects.push(bullets)
@@ -453,8 +470,18 @@ function CreateProjectiles(radius, numObjects, mass) {
     scene.add(bullets);
     physics.addMesh(bullets, mass, { CustomProperties: ObjectId }, CollisionHandler);
 
+    NetworkedObjects[ObjectId.ID] = {}
+
     for (let i = 0; i < bullets.count; i++) {
-        ProjectileStores[radius].storeMesh(bullets)
+        ProjectileStores[radius].storeMesh(bullets, ObjectId.ID )
+        let nextId = new Objects.ObjectIdentifier(ObjectId.ObjectType, ObjectId.ID, i)
+        if (ObjectId.ObjectType == Objects.objectTypes.bullet) {
+            NetworkedObjects[ObjectId.ID][i] = new Objects.Bullet(physics.getMeshProperties(bullets, i), nextId)
+        } else if (ObjectId.ObjectType == Objects.objectTypes.grenade) {
+            NetworkedObjects[ObjectId.ID][i] = new Objects.Grenade(physics.getMeshProperties(bullets, i), nextId)
+        } else if (ObjectId.ObjectType == Objects.objectTypes.shrapnel) {
+            NetworkedObjects[ObjectId.ID][i] = new Objects.Shrapnel(physics.getMeshProperties(bullets, i), nextId)
+        }
     }
 }
 
@@ -551,9 +578,9 @@ async function init(PeerBoxes) {
     CreateWall({ x: 2000, y: 2000, z: 2 }, { z: -598 })
     CreateWall({ x: 2000, y: 2000, z: 2 }, { z: 598 })
 
-    CreateProjectiles(2, 500, 1);
-    CreateProjectiles(5, 100, 1);
-    CreateProjectiles(0.5, 3000, 15);
+    CreateProjectiles(2, 500, 1, PeerBoxes);
+    CreateProjectiles(5, 100, 1, PeerBoxes);
+    CreateProjectiles(0.5, 3000, 15, PeerBoxes);
 
     // Boxes
     const geometryBox = new THREE.BoxGeometry(20, 20, 20);
@@ -653,15 +680,19 @@ function onWindowResize() {
     renderer.setSize(window.innerWidth, window.innerHeight);
 }
 
-function applyUpdatesFromNetwork(receivedObjects){
+function applyUpdatesFromNetwork(receivedObjects) {
     for (const key in receivedObjects) {
         const object = receivedObjects[key];
         for (const index in object) {
             const element = object[index];
             if (CollideAbleObjects[key]) {
                 if (element.pos) {
-                    physics.setMeshProperties(CollideAbleObjects[key], element, index)
-                }else{
+                    if ((element.ID.ObjectType & Objects.objectTypes.projectile) > 0) { //element.ID.ObjectType == Objects.objectTypes.craft ||
+                        physics.setMeshPropertiesWORotVel(CollideAbleObjects[key], element, index)
+                    } else {
+                        physics.setMeshProperties(CollideAbleObjects[key], element, index)
+                    }
+                } else {
                     // console.log(element, receivedObjects);
                 }
             }
@@ -683,8 +714,8 @@ function UpdateNetworkObjects() {
                     console.log(key)
                 }
             }
-            if (element.NeedsUpdated || element.ID.ObjectType == Objects.objectTypes.craft) {
-                element.NeedsUpdated = false;
+            if (element.NeedsUpdated > 0 || element.ID.ObjectType == Objects.objectTypes.craft) {
+                element.NeedsUpdated--;
                 if (CollideAbleObjects[key]) {
                     let prop = physics.getMeshProperties(CollideAbleObjects[key], index)
                     element.Update(prop);

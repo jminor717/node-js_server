@@ -13,7 +13,6 @@ function GenerateNetworkPacket(networkObjects) {
         const object = networkObjects[key];
         for (const index in object) {
             const element = object[index];
-            element.ToArray();
             data = data.concat(element.ToArray());
         }
     }
@@ -76,7 +75,7 @@ function receiveData(event) {
             try {
                 console.log('received:', event.data.length, ' bytes string', event.data);
                 if (FullState) {
-                    console.log("sending Full State 1")
+                    console.log("sending Full State 1", FullState)
                     llNetwork.sendData(Float32Array.from(GenerateNetworkPacket(FullState)).buffer)
                 }
             } catch (error2) {
@@ -92,7 +91,7 @@ async function WaitForConnection() {
     llNetwork.addSendChannelReadyCallback(() => {
         FlushSendQueue();
         if (FullState) {
-            console.log("sending Full State 2")
+            console.log("sending Full State 2", FullState)
             llNetwork.sendData(Float32Array.from(GenerateNetworkPacket(FullState)).buffer)
         }
     })
@@ -129,4 +128,5 @@ function SetUpdatePacketCallback(cb){
     StateReceivedCallBack = cb;
 }
 
-export { WaitForConnection, QueueObjectToSend, SetFullStateObject, SetUpdatePacketCallback }
+export { IsServer } from './transportLayer.js'
+export { WaitForConnection, QueueObjectToSend, SetFullStateObject, SetUpdatePacketCallback,   }

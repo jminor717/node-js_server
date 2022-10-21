@@ -1,11 +1,13 @@
-let pc;
-let sendChannel, receiveChannel, sendCount = 0, sendInterval;
+let clients ={};
+
 const MAX_CHUNK_SIZE = 262144;
 let WaitForNetwork, NetworkFoundResolve, NetworkFoundReject;
 
-let ReadyToSend = false;
+let IsServer = false, FoundServer = false, ReadyToSend = false;
 
 let OpenCallback = null, ReceiveCallback = null;
+
+const ClientID = Math.floor(Math.random() * Math.pow(2, 22))
 
 const signaling = new BroadcastChannel('webrtc');
 signaling.onmessage = e => {
@@ -14,160 +16,102 @@ signaling.onmessage = e => {
     //     console.log('not ready yet');
     //     return;
     // }
+    console.log(e);
     switch (e.data.type) {
         case 'offer':
+            FoundServer = true;
             handleOffer(e.data);
             break;
         case 'answer':
+            if (FoundServer) {
+                console.log('not the server, ignoring');
+                return;
+            }
             handleAnswer(e.data);
             break;
         case 'candidate':
+            if (FoundServer) {
+                console.log('not the server, ignoring');
+                return;
+            }
             handleCandidate(e.data);
             break;
         case 'ready':
             // A second tab joined. This tab will initiate a call unless in a call already.
-            if (pc) {
-                console.log('already in call, ignoring');
+            if (FoundServer && Object.keys(clients).length > 0){
+                console.log('not the server, ignoring');
                 return;
             }
-            makeCall();
+            FoundServer = false;
+            IsServer = true;
+            makeCall(e.data);
             break;
-        case 'bye':
-            if (pc) {
-                hangup();
-            }
-            break;
+        // case 'bye':
+        //     if (pc) {
+        //         hangup();
+        //     }
+        //     break;
         default:
             console.log('unhandled', e);
             break;
     }
 };
 
-async function makeCall() {
-    await createPeerConnection();
+async function makeCall(data) {
+    await createPeerConnection(data);
 
-    const offer = await pc.createOffer();
-    signaling.postMessage({ type: 'offer', sdp: offer.sdp });
-    await pc.setLocalDescription(offer);
+    const offer = await clients[data.ClientID].pc.createOffer();
+    signaling.postMessage({ type: 'offer', sdp: offer.sdp, ClientID: ClientID });
+    await clients[data.ClientID].pc.setLocalDescription(offer);
 }
 
 async function handleOffer(offer) {
-    if (pc) {
+    if (clients[offer.ClientID]?.pc) {
         console.error('existing peerconnection');
         return;
     }
-    await createPeerConnection();
-    await pc.setRemoteDescription(offer);
+    await createPeerConnection(offer);
+    await clients[offer.ClientID].pc.setRemoteDescription(offer);
 
-    const answer = await pc.createAnswer();
-    signaling.postMessage({ type: 'answer', sdp: answer.sdp });
-    await pc.setLocalDescription(answer);
+    const answer = await clients[offer.ClientID].pc.createAnswer();
+    signaling.postMessage({ type: 'answer', sdp: answer.sdp, ClientID: ClientID });
+    await clients[offer.ClientID].pc.setLocalDescription(answer);
 }
 
 async function handleAnswer(answer) {
-    if (!pc) {
+    if (!clients[answer.ClientID]?.pc) {
         console.error('no peerconnection');
         return;
     }
-    await pc.setRemoteDescription(answer);
+    await clients[answer.ClientID].pc.setRemoteDescription(answer);
 }
 
 async function handleCandidate(candidate) {
-    if (!pc) {
+    if (!clients[candidate.ClientID]?.pc) {
         console.error('no peerconnection');
         return;
     }
     if (!candidate.candidate) {
-        await pc.addIceCandidate(null);
+        await clients[candidate.ClientID].pc.addIceCandidate(null);
     } else {
-        await pc.addIceCandidate(candidate);
+        await clients[candidate.ClientID].pc.addIceCandidate(candidate);
     }
 }
 
-let ReadyState;
-
-function onSendChannelOpen() {
-    console.log('Send channel is open');
-    ReadyState = "AmReady";
-    sendInterval = setInterval(async () => {
-        if (ReadyState === "done") {
-            clearInterval(sendInterval);
-            return;
-        }else{
-            console.log("-------------------", ReadyState);
-            sendChannel.send(ReadyState);
-        }
-    }, 1000);
-}
-
-function onSendChannelClosed() {
-    console.log('Send channel is closed');
-    pc.close();
-    pc = null;
-    ReadyToSend = false;
-}
-
-function SetNetworkReady(){
-    ReadyToSend = true;
-    NetworkFoundResolve(true);
-    if (OpenCallback) {
-        OpenCallback();
-    }
-}
-
-
-function onReceiveMessageCallback(event) {
-    if (ReceiveCallback) {
-        ReceiveCallback(event);
-    }
-    // console.log('Current Throughput is:', event.data.length, 'bytes/sec');
-    if (event.data === "AmReady"){
-        ReadyState = "AcknowledgeReady"
-    }
-    if (event.data === "AcknowledgeReady") {
-        ReadyState = "done"
-        sendChannel.send(ReadyState);
-        clearInterval(sendInterval);
-        SetNetworkReady();
-    }
-    if (event.data === "done"){
-        clearInterval(sendInterval);
-        SetNetworkReady();
-    }
-
-    // Workaround for a bug in Chrome which prevents the closing event from being raised by the
-    // remote side. Also a workaround for Firefox which does not send all pending data when closing
-    // the channel.
-    // if (receiveProgress.value === receiveProgress.max) {
-    //     sendChannel.close();
-    //     receiveChannel.close();
-    // }
-}
-
-function onReceiveChannelClosed() {
-    console.log('Receive channel is closed');
-    pc.close();
-    pc = null;
-    console.log('Closed remote peer connection');
-    // maybeReset();
-}
-
-
-function receiveChannelCallback(event) {
-    console.log('Receive Channel Callback');
-    receiveChannel = event.channel;
-    receiveChannel.binaryType = 'arraybuffer';
-    // receiveChannel.addEventListener('close', onReceiveChannelClosed);
-    receiveChannel.addEventListener('message', onReceiveMessageCallback);
-}
-
-
-function createPeerConnection() {
-    pc = new RTCPeerConnection();
-    pc.onicecandidate = e => {
+function createPeerConnection(data) {
+    clients[data.ClientID] = {};
+    clients[data.ClientID].pc = new RTCPeerConnection();
+    clients[data.ClientID].sendInterval = null;
+    clients[data.ClientID].receiveChannel = null;
+    clients[data.ClientID].sendChannel = null;
+    clients[data.ClientID].ReadyState = null;
+    clients[data.ClientID].ReadyToSend = false;
+    
+    clients[data.ClientID].pc.onicecandidate = e => {
         const message = {
             type: 'candidate',
             candidate: null,
+            ClientID: ClientID
         };
         if (e.candidate) {
             message.candidate = e.candidate.candidate;
@@ -177,18 +121,101 @@ function createPeerConnection() {
         signaling.postMessage(message);
     };
     const dataChannelParams = { ordered: false };
-    pc.addEventListener('datachannel', receiveChannelCallback);
-    sendChannel = pc.createDataChannel('sendDataChannel', dataChannelParams);
-    sendChannel.addEventListener('open', onSendChannelOpen);
-    sendChannel.addEventListener('close', onSendChannelClosed);
-    console.log('Created send data channel: ', sendChannel);
+    clients[data.ClientID].pc.addEventListener('datachannel', (event) => { receiveChannelCallback(event, data.ClientID)});
+    clients[data.ClientID].sendChannel = clients[data.ClientID].pc.createDataChannel('sendDataChannel', dataChannelParams);
+    clients[data.ClientID].sendChannel.addEventListener('open', onSendChannelOpen.bind(this, data.ClientID));
+    clients[data.ClientID].sendChannel.addEventListener('close', onSendChannelClosed.bind(this, data.ClientID));
+    console.log('Created send data channel: ', clients[data.ClientID].sendChannel);
     // pc.ontrack = e => remoteVideo.srcObject = e.streams[0];
     // localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
 }
 
-var ObjectId;
+function onSendChannelClosed(id) {
+    console.log('Send channel is closed');
+    clients[id].pc.close();
+    delete clients[id];
+}
 
-async function ContactServer(obj) {
+function onReceiveChannelClosed(id) {
+    console.log('Receive channel is closed');
+    clients[id].pc.close();
+    delete clients[id];
+    console.log('Closed remote peer connection');
+    // maybeReset();
+}
+
+
+
+function onSendChannelOpen(id) {
+    console.log('Send channel is open');
+    clients[id].ReadyState = "AmReady";
+    clients[id].sendInterval = setInterval(async () => {
+        if (clients[id].ReadyState === "done") {
+            clearInterval(clients[id].sendInterval);
+            return;
+        } else {
+            console.log("-------------------", clients[id].ReadyState);
+            clients[id].sendChannel.send(clients[id].ReadyState);
+        }
+    }, 1000);
+}
+
+
+
+function SetNetworkReady(id) {
+    clients[id].ReadyToSend = true;
+    ReadyToSend = true;
+    NetworkFoundResolve(true);
+    if (OpenCallback) {
+        OpenCallback();
+    }
+}
+
+
+function onReceiveMessageCallback(event, id) {
+    if (ReceiveCallback) {
+        ReceiveCallback(event);
+    }
+    // console.log('Current Throughput is:', event.data.length, 'bytes/sec');
+    if (event.data === "AmReady") {
+        clients[id].ReadyState = "AcknowledgeReady"
+    }
+    if (event.data === "AcknowledgeReady") {
+        clients[id].ReadyState = "done"
+        clients[id].sendChannel.send(clients[id].ReadyState);
+        clearInterval(clients[id].sendInterval);
+        SetNetworkReady(id);
+    }
+    if (event.data === "done") {
+        clearInterval(clients[id].sendInterval);
+        SetNetworkReady(id);
+    }
+
+    // Workaround for a bug in Chrome which prevents the closing event from being raised by the
+    // remote side. Also a workaround for Firefox which does not send all pending data when closing
+    // the channel.
+    // if (receiveProgress.value === receiveProgress.max) {
+    //     clients[id].sendChannel.close();
+    //     clients[id].receiveChannel.close();
+    // }
+}
+
+
+
+
+function receiveChannelCallback(event, id) {
+    console.log(id, event);
+    console.log('Receive Channel Callback');
+    clients[id].receiveChannel = event.channel;
+    clients[id].receiveChannel.binaryType = 'arraybuffer';
+    // receiveChannel.addEventListener('close', onReceiveChannelClosed);
+    clients[id].receiveChannel.addEventListener('message', (msgEvt) => onReceiveMessageCallback(msgEvt, id));
+}
+
+
+
+
+async function ContactServer() {
     // git clone https://github.com/webrtc/samples.git
     // check the server to see if there are any active offers
     // if not
@@ -202,30 +229,34 @@ async function ContactServer(obj) {
     // this should be duplicated to create 2 way communication
     // localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
 
-    ObjectId = obj;
-
     WaitForNetwork = new Promise(function (resolve, reject) {
         NetworkFoundResolve = resolve;
         NetworkFoundReject = reject;
     });
     setTimeout(() => NetworkFoundReject(), 5000)
-    signaling.postMessage({ type: 'ready' });
+    signaling.postMessage({ type: 'ready', ClientID: ClientID });
 }
 
-function sendData(data){
-    if (ReadyToSend) {
-        sendChannel.send(data);
+function sendData(data) {
+    for (const key in clients) {
+        if (Object.hasOwnProperty.call(clients, key)) {
+            const element = clients[key];
+            if (element.ReadyToSend) {
+                element.sendChannel.send(data);
+            }
+        }
     }
+
 }
 
-function SetDataReceivedCallback(cb){
+function SetDataReceivedCallback(cb) {
     ReceiveCallback = cb;
     // receiveChannel.addEventListener('message', cb);
 }
 
-function addSendChannelReadyCallback(cb){
+function addSendChannelReadyCallback(cb) {
     OpenCallback = cb;
     // sendChannel.addEventListener('open', cb);
 }
 
-export { signaling, ContactServer, WaitForNetwork, sendData, SetDataReceivedCallback, addSendChannelReadyCallback, ReadyToSend }
+export { signaling, ContactServer, WaitForNetwork, sendData, SetDataReceivedCallback, addSendChannelReadyCallback, ReadyToSend, IsServer }
