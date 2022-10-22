@@ -1,11 +1,11 @@
-let clients ={};
+let clients = {};
 
 const MAX_CHUNK_SIZE = 262144;
 let WaitForNetwork, NetworkFoundResolve, NetworkFoundReject;
 
 let IsServer = false, FoundServer = false, ReadyToSend = false;
 
-let OpenCallback = null, ReceiveCallback = null;
+let OpenCallback = null, ReceiveCallback = null, CloseCallback = null, becomeServerCallback = null;
 
 const ClientID = Math.floor(Math.random() * Math.pow(2, 22))
 
@@ -16,7 +16,6 @@ signaling.onmessage = e => {
     //     console.log('not ready yet');
     //     return;
     // }
-    console.log(e);
     switch (e.data.type) {
         case 'offer':
             FoundServer = true;
@@ -38,12 +37,16 @@ signaling.onmessage = e => {
             break;
         case 'ready':
             // A second tab joined. This tab will initiate a call unless in a call already.
-            if (FoundServer && Object.keys(clients).length > 0){
+            if (FoundServer && Object.keys(clients).length > 0) {
                 console.log('not the server, ignoring');
                 return;
             }
             FoundServer = false;
+            console.log("becoming server")
             IsServer = true;
+            if (becomeServerCallback) {
+                becomeServerCallback();
+            }
             makeCall(e.data);
             break;
         // case 'bye':
@@ -106,7 +109,8 @@ function createPeerConnection(data) {
     clients[data.ClientID].sendChannel = null;
     clients[data.ClientID].ReadyState = null;
     clients[data.ClientID].ReadyToSend = false;
-    
+    clients[data.ClientID].OpenCallbackCalled = false;
+
     clients[data.ClientID].pc.onicecandidate = e => {
         const message = {
             type: 'candidate',
@@ -121,7 +125,7 @@ function createPeerConnection(data) {
         signaling.postMessage(message);
     };
     const dataChannelParams = { ordered: false };
-    clients[data.ClientID].pc.addEventListener('datachannel', (event) => { receiveChannelCallback(event, data.ClientID)});
+    clients[data.ClientID].pc.addEventListener('datachannel', (event) => { receiveChannelCallback(event, data.ClientID) });
     clients[data.ClientID].sendChannel = clients[data.ClientID].pc.createDataChannel('sendDataChannel', dataChannelParams);
     clients[data.ClientID].sendChannel.addEventListener('open', onSendChannelOpen.bind(this, data.ClientID));
     clients[data.ClientID].sendChannel.addEventListener('close', onSendChannelClosed.bind(this, data.ClientID));
@@ -133,6 +137,9 @@ function createPeerConnection(data) {
 function onSendChannelClosed(id) {
     console.log('Send channel is closed');
     clients[id].pc.close();
+    if (CloseCallback){
+        CloseCallback(id);
+    }
     delete clients[id];
 }
 
@@ -154,7 +161,7 @@ function onSendChannelOpen(id) {
             clearInterval(clients[id].sendInterval);
             return;
         } else {
-            console.log("-------------------", clients[id].ReadyState);
+            // console.log("-------------------", clients[id].ReadyState);
             clients[id].sendChannel.send(clients[id].ReadyState);
         }
     }, 1000);
@@ -163,18 +170,19 @@ function onSendChannelOpen(id) {
 
 
 function SetNetworkReady(id) {
-    clients[id].ReadyToSend = true;
     ReadyToSend = true;
     NetworkFoundResolve(true);
-    if (OpenCallback) {
+    if (OpenCallback && !clients[id].OpenCallbackCalled) {
+        // clients[id].OpenCallbackCalled = true;
         OpenCallback();
     }
+    clients[id].ReadyToSend = true;
 }
 
 
 function onReceiveMessageCallback(event, id) {
     if (ReceiveCallback) {
-        ReceiveCallback(event);
+        ReceiveCallback(event, id);
     }
     // console.log('Current Throughput is:', event.data.length, 'bytes/sec');
     if (event.data === "AmReady") {
@@ -259,4 +267,26 @@ function addSendChannelReadyCallback(cb) {
     // sendChannel.addEventListener('open', cb);
 }
 
-export { signaling, ContactServer, WaitForNetwork, sendData, SetDataReceivedCallback, addSendChannelReadyCallback, ReadyToSend, IsServer }
+function addSendChannelCloseCallback(cb) {
+    CloseCallback = cb;
+    // sendChannel.addEventListener('open', cb);
+}
+
+function addServerChangedCallback(cb) {
+    becomeServerCallback = cb;
+    // sendChannel.addEventListener('open', cb);
+}
+
+export {
+    signaling,
+    ContactServer,
+    WaitForNetwork,
+    sendData,
+    SetDataReceivedCallback,
+    addSendChannelReadyCallback,
+    addSendChannelCloseCallback,
+    addServerChangedCallback,
+    ReadyToSend,
+    IsServer, 
+    ClientID as MyClientID
+}

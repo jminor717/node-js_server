@@ -1,64 +1,74 @@
 import * as OIMO from 'three/addons/libs/OimoPhysics/index.js';
 
-async function OimoPhysics(gravity) {
+const frameRate = 60;
+const meshes = [];
+const meshMap = new WeakMap();
+let lastTime = 0;
+let world = null;
 
-	const frameRate = 60;
+function getShape(geometry) {
+	const parameters = geometry.parameters;
+	// TODO change type to is* OCylinderGeometry
+	if (geometry.type === 'BoxGeometry') {
+		const sx = parameters.width !== undefined ? parameters.width / 2 : 0.5;
+		const sy = parameters.height !== undefined ? parameters.height / 2 : 0.5;
+		const sz = parameters.depth !== undefined ? parameters.depth / 2 : 0.5;
 
-	const world = new OIMO.World(2, new OIMO.Vec3(0, gravity, 0));
-
-
-	//
-
-	function getShape(geometry) {
-
-		const parameters = geometry.parameters;
-
-		// TODO change type to is*
-
-		if (geometry.type === 'BoxGeometry') {
-
-			const sx = parameters.width !== undefined ? parameters.width / 2 : 0.5;
-			const sy = parameters.height !== undefined ? parameters.height / 2 : 0.5;
-			const sz = parameters.depth !== undefined ? parameters.depth / 2 : 0.5;
-
-			return new OIMO.OBoxGeometry(new OIMO.Vec3(sx, sy, sz));
-
-		} else if (geometry.type === 'SphereGeometry' || geometry.type === 'IcosahedronGeometry') {
-
-			const radius = parameters.radius !== undefined ? parameters.radius : 1;
-
-			return new OIMO.OSphereGeometry(radius);
-
-		}
-
-		return null;
-
+		return new OIMO.OBoxGeometry(new OIMO.Vec3(sx, sy, sz));
+	} else if (geometry.type === 'SphereGeometry' || geometry.type === 'IcosahedronGeometry') {
+		const radius = parameters.radius !== undefined ? parameters.radius : 1;
+		return new OIMO.OSphereGeometry(radius);
 	}
-
-	const meshes = [];
-	const meshMap = new WeakMap();
-
-	function addMesh(mesh, mass = 0, extraProperties = {}, collisionCallback = null) {
-
-		const shape = getShape(mesh.geometry);
-
-		if (shape !== null) {
-
-			if (mesh.isInstancedMesh) {
-
-				handleInstancedMesh(mesh, mass, shape, extraProperties, collisionCallback);
-
-			} else if (mesh.isMesh) {
-
-				handleMesh(mesh, mass, shape, extraProperties, collisionCallback);
-
-			}
-
-		}
-
+	else{
+		console.log(geometry)
 	}
+	return null;
+}
 
-	function handleMesh(mesh, mass, shape, extraProperties, collisionCallback) {
+
+
+function addMesh(mesh, mass = 0, extraProperties = {}, collisionCallback = null) {
+	const shape = getShape(mesh.geometry);
+	if (shape !== null) {
+		if (mesh.isInstancedMesh) {
+			handleInstancedMesh(mesh, mass, shape, extraProperties, collisionCallback);
+		} else if (mesh.isMesh) {
+			handleMesh(mesh, mass, shape, extraProperties, collisionCallback);
+		}
+	}
+}
+
+function handleMesh(mesh, mass, shape, extraProperties, collisionCallback) {
+
+	const shapeConfig = new OIMO.ShapeConfig();
+	shapeConfig.geometry = shape;
+	shapeConfig.density = mass;
+	shapeConfig.contactCallback = collisionCallback; //setContactCallback(callback)
+
+	const bodyConfig = new OIMO.RigidBodyConfig();
+	bodyConfig.type = mass === 0 ? OIMO.RigidBodyType.STATIC : OIMO.RigidBodyType.DYNAMIC;
+	bodyConfig.friction = 0;
+	bodyConfig.position = new OIMO.Vec3(mesh.position.x, mesh.position.y, mesh.position.z);
+
+	let body = new OIMO.RigidBody(bodyConfig);
+	extraProperties.CustomProperties.index = 0;
+	body = Object.assign(body, structuredClone(extraProperties));
+
+	body.addShape(new OIMO.Shape(shapeConfig));
+	world.addRigidBody(body);
+	// console.log(body.getMassData())
+	if (mass > 0) {
+		meshes.push(mesh);
+		meshMap.set(mesh, body);
+	}
+}
+
+function handleInstancedMesh(mesh, mass, shape, extraProperties, collisionCallback) {
+	const array = mesh.instanceMatrix.array;
+	const bodies = [];
+
+	for (let i = 0; i < mesh.count; i++) {
+		const index = i * 16;
 
 		const shapeConfig = new OIMO.ShapeConfig();
 		shapeConfig.geometry = shape;
@@ -67,237 +77,155 @@ async function OimoPhysics(gravity) {
 
 		const bodyConfig = new OIMO.RigidBodyConfig();
 		bodyConfig.type = mass === 0 ? OIMO.RigidBodyType.STATIC : OIMO.RigidBodyType.DYNAMIC;
+		bodyConfig.position = new OIMO.Vec3(array[index + 12], array[index + 13], array[index + 14]);
 		bodyConfig.friction = 0;
-		bodyConfig.position = new OIMO.Vec3(mesh.position.x, mesh.position.y, mesh.position.z);
 
 		let body = new OIMO.RigidBody(bodyConfig);
-		extraProperties.CustomProperties.index = 0;
+		extraProperties.CustomProperties.index = i;
 		body = Object.assign(body, structuredClone(extraProperties));
 
 		body.addShape(new OIMO.Shape(shapeConfig));
 		world.addRigidBody(body);
+
+		bodies.push(body);
 		// console.log(body.getMassData())
-		if (mass > 0) {
-
-			meshes.push(mesh);
-			meshMap.set(mesh, body);
-
-		}
-
 	}
 
-	function handleInstancedMesh(mesh, mass, shape, extraProperties, collisionCallback) {
-
-		const array = mesh.instanceMatrix.array;
-
-		const bodies = [];
-
-		for (let i = 0; i < mesh.count; i++) {
-
-			const index = i * 16;
-
-			const shapeConfig = new OIMO.ShapeConfig();
-			shapeConfig.geometry = shape;
-			shapeConfig.density = mass;
-			shapeConfig.contactCallback = collisionCallback; //setContactCallback(callback)
-
-			const bodyConfig = new OIMO.RigidBodyConfig();
-			bodyConfig.type = mass === 0 ? OIMO.RigidBodyType.STATIC : OIMO.RigidBodyType.DYNAMIC;
-			bodyConfig.position = new OIMO.Vec3(array[index + 12], array[index + 13], array[index + 14]);
-			bodyConfig.friction = 0;
-
-			let body = new OIMO.RigidBody(bodyConfig);
-			extraProperties.CustomProperties.index = i;
-			body = Object.assign(body, structuredClone(extraProperties));
-
-			body.addShape(new OIMO.Shape(shapeConfig));
-			world.addRigidBody(body);
-
-			bodies.push(body);
-			// console.log(body.getMassData())
-
-		}
-
-		if (mass > 0) {
-
-			meshes.push(mesh);
-			meshMap.set(mesh, bodies);
-
-		}
-
+	if (mass > 0) {
+		meshes.push(mesh);
+		meshMap.set(mesh, bodies);
 	}
-
-	//
-
-	function setMeshPosition(mesh, position, index = 0) {
-		if (mesh.isInstancedMesh) {
-			const bodies = meshMap.get(mesh);
-			const body = bodies[index];
-
-			body.setLinearVelocity(new OIMO.Vec3(0, 0, 0));
-			body.setPosition(new OIMO.Vec3(position.x, position.y, position.z));
-		} else if (mesh.isMesh) {
-			const body = meshMap.get(mesh);
-			body.setLinearVelocity(new OIMO.Vec3(0, 0, 0));
-			body.setPosition(new OIMO.Vec3(position.x, position.y, position.z));
-		}
-	}
-
-	function getMeshPosition(mesh, index = 0) {
-		if (mesh.isInstancedMesh) {
-			const bodies = meshMap.get(mesh);
-			const body = bodies[index];
-
-			return body.getPosition();
-		} else if (mesh.isMesh) {
-			const body = meshMap.get(mesh);
-			return body.getPosition();
-		}
-	}
-
-	function getMeshVelocity(mesh, index = 0) {
-		if (mesh.isInstancedMesh) {
-			const bodies = meshMap.get(mesh);
-			const body = bodies[index];
-
-			return body.getLinearVelocity();
-		} else if (mesh.isMesh) {
-			const body = meshMap.get(mesh);
-			return body.getLinearVelocity();
-		}
-	}
-
-	function setMeshVelocity(mesh, velocity, index = 0) {
-		if (mesh.isInstancedMesh) {
-			const bodies = meshMap.get(mesh);
-			const body = bodies[index];
-
-			body.setLinearVelocity(new OIMO.Vec3(velocity.x, velocity.y, velocity.z));
-		} else if (mesh.isMesh) {
-			const body = meshMap.get(mesh);
-			body.setLinearVelocity(new OIMO.Vec3(velocity.x, velocity.y, velocity.z));
-		}
-	}
-
-	function getMeshProperties(mesh, index = 0) {
-		if (mesh.isInstancedMesh) {
-			const bodies = meshMap.get(mesh);
-			const body = bodies[index];
-
-			return { pos: body.getPosition(), vel: body.getLinearVelocity(), rot: body.getOrientation(), rotVel: body.getAngularVelocity() };
-		} else if (mesh.isMesh) {
-			const body = meshMap.get(mesh);
-			return { pos: body.getPosition(), vel: body.getLinearVelocity(), rot: body.getOrientation(), rotVel: body.getAngularVelocity() };
-		}
-	}
-
-	function setMeshProperties(mesh, object, index = 0) {
-		if (mesh.isInstancedMesh) {
-			const bodies = meshMap.get(mesh);
-			const body = bodies[index];
-
-			body.setRotationXyz({ x: object.rot.x, y: object.rot.y, z: object.rot.z, w: object.rot.w });
-			body.setPosition(new OIMO.Vec3(object.pos.x, object.pos.y, object.pos.z));
-			body.setLinearVelocity(new OIMO.Vec3(object.vel.x, object.vel.y, object.vel.z));
-			body.setAngularVelocity(new OIMO.Vec3(object.rotVel.x, object.rotVel.y, object.rotVel.z));
-
-		} else if (mesh.isMesh) {
-			const body = meshMap.get(mesh);
-			body.setRotationXyz({ x: object.rot.x, y: object.rot.y, z: object.rot.z, w: object.rot.w });
-			body.setPosition(new OIMO.Vec3(object.pos.x, object.pos.y, object.pos.z));
-			body.setLinearVelocity(new OIMO.Vec3(object.vel.x, object.vel.y, object.vel.z));
-			body.setAngularVelocity(new OIMO.Vec3(object.rotVel.x, object.rotVel.y, object.rotVel.z));
-		}
-	}
-
-	function setMeshPropertiesWORotVel(mesh, object, index = 0) {
-		if (mesh.isInstancedMesh) {
-			const bodies = meshMap.get(mesh);
-			const body = bodies[index];
-
-			//body.setRotationXyz({ x: object.rot.x, y: object.rot.y, z: object.rot.z, w: object.rot.w });
-			body.setPosition(new OIMO.Vec3(object.pos.x, object.pos.y, object.pos.z));
-			body.setLinearVelocity(new OIMO.Vec3(object.vel.x, object.vel.y, object.vel.z));
-			// body.setAngularVelocity(new OIMO.Vec3(object.rotVel.x, object.rotVel.y, object.rotVel.z));
-
-		} else if (mesh.isMesh) {
-			const body = meshMap.get(mesh);
-			// body.setRotationXyz({ x: object.rot.x, y: object.rot.y, z: object.rot.z, w: object.rot.w });
-			body.setPosition(new OIMO.Vec3(object.pos.x, object.pos.y, object.pos.z));
-			body.setLinearVelocity(new OIMO.Vec3(object.vel.x, object.vel.y, object.vel.z));
-			// body.setAngularVelocity(new OIMO.Vec3(object.rotVel.x, object.rotVel.y, object.rotVel.z));
-		}
-	}
-	//
-
-	let lastTime = 0;
-
-	function step() {
-
-		const time = performance.now();
-
-		if (lastTime > 0) {
-
-			// console.time( 'world.step' );
-			world.step(1 / frameRate);
-			// console.timeEnd( 'world.step' );
-
-		}
-
-		lastTime = time;
-
-		//
-
-		for (let i = 0, l = meshes.length; i < l; i++) {
-
-			const mesh = meshes[i];
-
-			if (mesh.isInstancedMesh) {
-
-				const array = mesh.instanceMatrix.array;
-				const bodies = meshMap.get(mesh);
-
-				for (let j = 0; j < bodies.length; j++) {
-
-					const body = bodies[j];
-
-					compose(body.getPosition(), body.getOrientation(), array, j * 16);
-
-				}
-
-				mesh.instanceMatrix.needsUpdate = true;
-
-			} else if (mesh.isMesh) {
-
-				const body = meshMap.get(mesh);
-
-				mesh.position.copy(body.getPosition());
-				mesh.quaternion.copy(body.getOrientation());
-
-			}
-
-		}
-
-	}
-
-
-	// animate
-
-	setInterval(step, 1000 / frameRate);
-
-	return {
-		addMesh: addMesh,
-		setMeshPosition: setMeshPosition,
-		getMeshPosition: getMeshPosition,
-		getMeshVelocity: getMeshVelocity,
-		setMeshVelocity: setMeshVelocity,
-		getMeshProperties: getMeshProperties,
-		setMeshProperties: setMeshProperties,
-		setMeshPropertiesWORotVel: setMeshPropertiesWORotVel,
-		// addCompoundMesh
-	};
-
 }
+
+function setMeshPosition(mesh, position, index = 0) {
+	if (mesh.isInstancedMesh) {
+		const bodies = meshMap.get(mesh);
+		const body = bodies[index];
+
+		body.setLinearVelocity(new OIMO.Vec3(0, 0, 0));
+		body.setPosition(new OIMO.Vec3(position.x, position.y, position.z));
+	} else if (mesh.isMesh) {
+		const body = meshMap.get(mesh);
+		body.setLinearVelocity(new OIMO.Vec3(0, 0, 0));
+		body.setPosition(new OIMO.Vec3(position.x, position.y, position.z));
+	}
+}
+
+function getMeshPosition(mesh, index = 0) {
+	if (mesh.isInstancedMesh) {
+		const bodies = meshMap.get(mesh);
+		const body = bodies[index];
+
+		return body.getPosition();
+	} else if (mesh.isMesh) {
+		const body = meshMap.get(mesh);
+		return body.getPosition();
+	}
+}
+
+function getMeshVelocity(mesh, index = 0) {
+	if (mesh.isInstancedMesh) {
+		const bodies = meshMap.get(mesh);
+		const body = bodies[index];
+
+		return body.getLinearVelocity();
+	} else if (mesh.isMesh) {
+		const body = meshMap.get(mesh);
+		return body.getLinearVelocity();
+	}
+}
+
+function setMeshVelocity(mesh, velocity, index = 0) {
+	if (mesh.isInstancedMesh) {
+		const bodies = meshMap.get(mesh);
+		const body = bodies[index];
+
+		body.setLinearVelocity(new OIMO.Vec3(velocity.x, velocity.y, velocity.z));
+	} else if (mesh.isMesh) {
+		const body = meshMap.get(mesh);
+		body.setLinearVelocity(new OIMO.Vec3(velocity.x, velocity.y, velocity.z));
+	}
+}
+
+function getMeshProperties(mesh, index = 0) {
+	if (mesh.isInstancedMesh) {
+		const bodies = meshMap.get(mesh);
+		const body = bodies[index];
+
+		return { pos: body.getPosition(), vel: body.getLinearVelocity(), rot: body.getOrientation(), rotVel: body.getAngularVelocity() };
+	} else if (mesh.isMesh) {
+		const body = meshMap.get(mesh);
+		return { pos: body.getPosition(), vel: body.getLinearVelocity(), rot: body.getOrientation(), rotVel: body.getAngularVelocity() };
+	}
+}
+
+function setMeshProperties(mesh, object, index = 0) {
+	if (mesh.isInstancedMesh) {
+		const bodies = meshMap.get(mesh);
+		const body = bodies[index];
+
+		body.setRotationXyz({ x: object.rot.x, y: object.rot.y, z: object.rot.z, w: object.rot.w });
+		body.setPosition(new OIMO.Vec3(object.pos.x, object.pos.y, object.pos.z));
+		body.setLinearVelocity(new OIMO.Vec3(object.vel.x, object.vel.y, object.vel.z));
+		body.setAngularVelocity(new OIMO.Vec3(object.rotVel.x, object.rotVel.y, object.rotVel.z));
+
+	} else if (mesh.isMesh) {
+		const body = meshMap.get(mesh);
+		body.setRotationXyz({ x: object.rot.x, y: object.rot.y, z: object.rot.z, w: object.rot.w });
+		body.setPosition(new OIMO.Vec3(object.pos.x, object.pos.y, object.pos.z));
+		body.setLinearVelocity(new OIMO.Vec3(object.vel.x, object.vel.y, object.vel.z));
+		body.setAngularVelocity(new OIMO.Vec3(object.rotVel.x, object.rotVel.y, object.rotVel.z));
+	}
+}
+
+function setMeshPropertiesWORotVel(mesh, object, index = 0) {
+	if (mesh.isInstancedMesh) {
+		const bodies = meshMap.get(mesh);
+		const body = bodies[index];
+
+		//body.setRotationXyz({ x: object.rot.x, y: object.rot.y, z: object.rot.z, w: object.rot.w });
+		body.setPosition(new OIMO.Vec3(object.pos.x, object.pos.y, object.pos.z));
+		body.setLinearVelocity(new OIMO.Vec3(object.vel.x, object.vel.y, object.vel.z));
+		// body.setAngularVelocity(new OIMO.Vec3(object.rotVel.x, object.rotVel.y, object.rotVel.z));
+
+	} else if (mesh.isMesh) {
+		const body = meshMap.get(mesh);
+		// body.setRotationXyz({ x: object.rot.x, y: object.rot.y, z: object.rot.z, w: object.rot.w });
+		body.setPosition(new OIMO.Vec3(object.pos.x, object.pos.y, object.pos.z));
+		body.setLinearVelocity(new OIMO.Vec3(object.vel.x, object.vel.y, object.vel.z));
+		// body.setAngularVelocity(new OIMO.Vec3(object.rotVel.x, object.rotVel.y, object.rotVel.z));
+	}
+}
+
+function step() {
+	const time = performance.now();
+	if (lastTime > 0) {
+		// console.time( 'world.step' );
+		world.step(1 / frameRate);
+		// console.timeEnd( 'world.step' );
+	}
+	lastTime = time;
+
+	for (let i = 0, l = meshes.length; i < l; i++) {
+		const mesh = meshes[i];
+		if (mesh.isInstancedMesh) {
+			const array = mesh.instanceMatrix.array;
+			const bodies = meshMap.get(mesh);
+
+			for (let j = 0; j < bodies.length; j++) {
+				const body = bodies[j];
+				compose(body.getPosition(), body.getOrientation(), array, j * 16);
+			}
+			mesh.instanceMatrix.needsUpdate = true;
+		} else if (mesh.isMesh) {
+			const body = meshMap.get(mesh);
+
+			mesh.position.copy(body.getPosition());
+			mesh.quaternion.copy(body.getOrientation());
+		}
+	}
+}
+
 
 function compose(position, quaternion, array, index) {
 
@@ -329,4 +257,24 @@ function compose(position, quaternion, array, index) {
 
 }
 
-export { OimoPhysics };
+async function OimoPhysics(gravity) {
+	// animate
+	world = new OIMO.World(2, new OIMO.Vec3(0, gravity, 0));
+	setInterval(step, 1000 / frameRate);
+
+	return;
+}
+
+
+
+export {
+	OimoPhysics,
+	addMesh,
+	setMeshPosition,
+	getMeshPosition,
+	getMeshVelocity,
+	setMeshVelocity,
+	getMeshProperties,
+	setMeshProperties,
+	setMeshPropertiesWORotVel
+};

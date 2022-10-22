@@ -5,6 +5,8 @@ let SendQueue = []
 let NetworkResolve, NetworkReject;
 let FullState = null;
 let StateReceivedCallBack = null;
+let NewPlayerJoinedCallback = null;
+let trackedPlayers = {};
 
 function GenerateNetworkPacket(networkObjects) {
     let data = [];
@@ -49,34 +51,40 @@ function isAbv(value) {
     return value && value instanceof ArrayBuffer && value.byteLength !== undefined;
 }
 
-function receiveData(event) {
+function receiveData(event, playerId) {
     if (isAbv(event.data)) {
         // console.log('received ArrayBuffer:', event.data.byteLength, ' bytes');
         let stuff = GenerateStateFromBuffer(event.data);
         // console.log(NetworkResolve, stuff)
-        if (event.data.byteLength > 1000){
+        if (event.data.byteLength > 1000) {
             NetworkResolve(stuff);
         }
+        if (!trackedPlayers[playerId]) {
+            if (NewPlayerJoinedCallback) {
+                NewPlayerJoinedCallback(stuff, playerId)
+                trackedPlayers[playerId] = { id: playerId };
+            }
+        }
+
         if (StateReceivedCallBack) {
             StateReceivedCallBack(stuff)
         }
 
-        
+
+
     } else {
-        console.log('received:', event.data.length, ' bytes');
+        // console.log('received:', event.data.length, ' bytes');
         try {
             let data = JSON.parse(event.data)
             if (data?.cmd) {
-                if (data.cmd === "sendState") {
-                    NetworkResolve(data.data);
-                }
+                console.log(data);
             }
         } catch (error) {
             try {
                 console.log('received:', event.data.length, ' bytes string', event.data);
                 if (FullState) {
                     console.log("sending Full State 1", FullState)
-                    llNetwork.sendData(Float32Array.from(GenerateNetworkPacket(FullState)).buffer)
+                    //llNetwork.sendData(Float32Array.from(GenerateNetworkPacket(FullState)).buffer)
                 }
             } catch (error2) {
                 console.log("Error", error2)
@@ -102,7 +110,7 @@ async function WaitForConnection() {
         NetworkReject = reject;
     });
 
-    setTimeout(() => NetworkReject(), Math.floor(Math.random() * 3000))
+    setTimeout(() => NetworkReject(), 5000) //Math.floor(Math.random() * 3000)
 
     return await WaitForOtherInit;
 
@@ -124,9 +132,19 @@ function SetFullStateObject(obj) {
     // console.log(FullState, GenerateStateFromBuffer(view.buffer));
 }
 
-function SetUpdatePacketCallback(cb){
+function SetUpdatePacketCallback(cb) {
     StateReceivedCallBack = cb;
 }
 
-export { IsServer } from './transportLayer.js'
-export { WaitForConnection, QueueObjectToSend, SetFullStateObject, SetUpdatePacketCallback,   }
+function NewPlayerCallback(cb) {
+    NewPlayerJoinedCallback = cb;
+}
+
+function PlayerLeftCallback(cb) {
+    llNetwork.addSendChannelCloseCallback(cb)
+}
+
+
+
+export { IsServer, MyClientID, addServerChangedCallback } from './transportLayer.js'
+export { WaitForConnection, QueueObjectToSend, SetFullStateObject, SetUpdatePacketCallback, NewPlayerCallback, PlayerLeftCallback }

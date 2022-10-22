@@ -9,7 +9,7 @@ import * as Network from './ApplicationLayer.js';
 import { PointerLockControls } from './Controls.js';
 // import { AmmoPhysics } from '../three.js/examples/jsm/physics/AmmoPhysics.js';
 import Stats from 'three/addons/libs/stats.module.js';
-import { OimoPhysics } from 'components/OimoPhysics.js';
+import * as  physics from 'components/OimoPhysics.js';
 
 
 class callback_ContactCallback {
@@ -29,17 +29,28 @@ class callback_ContactCallback {
             //     || Id2.ObjectType == Objects.objectTypes.box && (Id1.ObjectType == Objects.objectTypes.bullet || Id1.ObjectType == Objects.objectTypes.grenade || Id1.ObjectType == Objects.objectTypes.shrapnel)) {
             const O1 = CollideAbleObjects[Id1.ID], O2 = CollideAbleObjects[Id2.ID];
             // console.log(Id1, Id2, O1, O2);
-
+            // try {
             if (NetworkedObjects[Id1.ID])
                 if (NetworkedObjects[Id1.ID][Id1.index]) {
                     NetworkedObjects[Id1.ID][Id1.index].hasCollided = true;
-                    NetworkedObjects[Id2.ID][Id2.index].NeedsUpdated = this.updatesPerCollision;
+                    NetworkedObjects[Id1.ID][Id1.index].NeedsUpdated = this.updatesPerCollision;
                 }
+            // } catch (error) {
+            //     console.log(Id1, NetworkedObjects[Id1.ID], error)
+            //     return;
+            // }
+            // try {
             if (NetworkedObjects[Id2.ID])
                 if (NetworkedObjects[Id2.ID][Id2.index]) {
                     NetworkedObjects[Id2.ID][Id2.index].hasCollided = true;
                     NetworkedObjects[Id2.ID][Id2.index].NeedsUpdated = this.updatesPerCollision;
                 }
+            // } catch (error) {
+            //     console.log(Id2, NetworkedObjects[Id2.ID], error)
+            //     return;
+            // }
+
+
 
             if (O1?.instanceColor) {
                 O1.instanceColor.needsUpdate = true;
@@ -156,9 +167,9 @@ class OffscreenStorage {
     }
     offscreenPoint(index) {
         return new THREE.Vector3(
-            20 + ((index & this.modulus) * this.spacing),
-            20 + ((index >> this.divisor) * this.spacing),
-            20 + (this.storagePlane) * this.spacing);
+            2000 + ((index & this.modulus) * this.spacing),
+            2000 + ((index >> this.divisor) * this.spacing),
+            2000 + (this.storagePlane) * this.spacing);
     }
     storeMesh(mesh, id) {
         this.instancedMesh = mesh;
@@ -177,7 +188,7 @@ class OffscreenStorage {
         if (this.instancedMesh) {
             let startingPosition = physics.getMeshPosition(this.instancedMesh, index);
             physics.setMeshPosition(this.instancedMesh, this.offscreenPoint(index), index);
-            NetworkedObjects[this.instanceID][this.currentIndex].NeedsUpdated = 1;
+            NetworkedObjects[this.instanceID][this.currentIndex].NeedsUpdated = 2;
             // this.currentIndex++;
             return startingPosition;
         }
@@ -208,7 +219,7 @@ class OffscreenStorage {
     }
 }
 
-let camera, scene, renderer, controls, physics, stats;
+let camera, scene, renderer, controls, stats;
 let craftPos;
 let ObjectId = new Objects.ObjectIdentifier();
 const defaultBulletStore = new OffscreenStorage(20, 8, 1, Objects.objectTypes.bullet);
@@ -221,13 +232,14 @@ const ProjectileStores = {
 }
 const GrenadeTimeouts = []
 
-const CollisionHandler = new callback_ContactCallback(Network.IsServer ? 2 : 0);
+const CollisionHandler = new callback_ContactCallback(Network.IsServer ? NupNetworkUpdatesPerCollision : 0);
 const AimAbleObjects = [];
 const CollideAbleObjects = {};
 
 const NetworkedObjects = {};
 
 const friction = 1;
+const NupNetworkUpdatesPerCollision = 2;
 const bulletMaterial = new THREE.MeshLambertMaterial();
 
 let UserInputs = new UserInputState(1);
@@ -241,10 +253,10 @@ let craftProperties = {
     mass: 0.1,
     inertia: 1,
     gunPositions: [
-        new THREE.Vector3(-7, -7, -10),
-        new THREE.Vector3(7, -7, -10),
-        new THREE.Vector3(7, 7, -10),
-        new THREE.Vector3(-7, 7, -10)
+        new THREE.Vector3(-7, -7, -3),
+        new THREE.Vector3(7, -7, -3),
+        new THREE.Vector3(7, 7, -3),
+        new THREE.Vector3(-7, 7, -3)
     ],
     currentGunIndex: 0
 }
@@ -282,7 +294,7 @@ function makeBullet(mass, inertia, speed, craftOffset, objectStore) {
     bulletVel.add(myVelocity);
     objectStore.setLastMeshMeshPosAndVel(craftOffset, bulletVel);
     impartedImpulse.add(bulletVel.multiplyScalar(inertia / craft.inertia));
-    
+
     return objectStore.currentIndex;
 }
 
@@ -451,16 +463,7 @@ function CreateProjectiles(radius, numObjects, mass, PeerBoxes) {
     // boxes.receiveShadow = true;
     // objects.push(boxes);
 
-    let UUID = null
-    if (PeerBoxes) {
-        for (const key in PeerBoxes) {
-            const object = PeerBoxes[key];
-            if (object.ObjectType == ProjectileStores[radius].objectType) {
-                UUID = object[0].ID.ID
-                break;
-            }
-        }
-    }
+    let UUID = getFirstUuidOfType(PeerBoxes, ProjectileStores[radius].objectType)
 
     ObjectId = new Objects.ObjectIdentifier(ProjectileStores[radius].objectType, UUID);
     CollideAbleObjects[ObjectId.ID] = bullets;
@@ -473,7 +476,7 @@ function CreateProjectiles(radius, numObjects, mass, PeerBoxes) {
     NetworkedObjects[ObjectId.ID] = {}
 
     for (let i = 0; i < bullets.count; i++) {
-        ProjectileStores[radius].storeMesh(bullets, ObjectId.ID )
+        ProjectileStores[radius].storeMesh(bullets, ObjectId.ID)
         let nextId = new Objects.ObjectIdentifier(ObjectId.ObjectType, ObjectId.ID, i)
         if (ObjectId.ObjectType == Objects.objectTypes.bullet) {
             NetworkedObjects[ObjectId.ID][i] = new Objects.Bullet(physics.getMeshProperties(bullets, i), nextId)
@@ -485,9 +488,42 @@ function CreateProjectiles(radius, numObjects, mass, PeerBoxes) {
     }
 }
 
+function createOtherCraft(uuid, otherCraft) {
+    const otherCraftGeometry = new THREE.IcosahedronGeometry(7, 2);//.toNonIndexed();
+    const otherCraftMaterial = new THREE.MeshLambertMaterial();
+    const otherCraftMesh = new THREE.Mesh(otherCraftGeometry, otherCraftMaterial);
+    otherCraftMesh.castShadow = true;
+    otherCraftMesh.receiveShadow = true;
+    ObjectId = new Objects.ObjectIdentifier(Objects.objectTypes.craft, uuid)
+    physics.addMesh(otherCraftMesh, craft.mass, { CustomProperties: ObjectId });
+    scene.add(otherCraftMesh);
+    physics.setMeshPropertiesWORotVel(otherCraftMesh, otherCraft);
+    CollideAbleObjects[uuid] = otherCraftMesh
+}
+
+function removeOtherCraft(uuid) {
+    const otherCraftMesh = CollideAbleObjects[uuid];
+    physics.setMeshPosition(otherCraftMesh,
+        new THREE.Vector3(5000 + (Math.random() * 1000), 5000 + (Math.random() * 1000), 5000 + (Math.random() * 1000)));
+    scene.remove(otherCraftMesh);
+    // CollideAbleObjects[uuid] = otherCraftMesh
+}
+
+function getFirstUuidOfType(ListToSearch, objectType) {
+    if (ListToSearch) {
+        for (const key in ListToSearch) {
+            const object = ListToSearch[key];
+            if (object.ObjectType == objectType) {
+                return object[0].ID.ID;
+            }
+        }
+    }
+    return null;
+}
+
 async function init(PeerBoxes) {
 
-    physics = await OimoPhysics(0);
+    await physics.OimoPhysics(0);
     craftPos = new THREE.Vector3();
 
     scene = new THREE.Scene();
@@ -511,7 +547,7 @@ async function init(PeerBoxes) {
 
     // Object.assign(craft, craftMesh);
     // Object.assign(craft, camera);
-    ObjectId = new Objects.ObjectIdentifier(Objects.objectTypes.craft)
+    ObjectId = new Objects.ObjectIdentifier(Objects.objectTypes.craft, Network.MyClientID)
     physics.addMesh(craft.children[0], craft.mass, { CustomProperties: ObjectId });
     scene.add(craft);
 
@@ -597,32 +633,13 @@ async function init(PeerBoxes) {
     if (PeerBoxes) {
         for (const key in PeerBoxes) {
             const object = PeerBoxes[key];
-            if (object.ObjectType == Objects.objectTypes.craft) {
-                const otherCraftGeometry = new THREE.IcosahedronGeometry(7, 2);//.toNonIndexed();
-                const otherCraftMaterial = new THREE.MeshLambertMaterial();
-                const otherCraftMesh = new THREE.Mesh(otherCraftGeometry, otherCraftMaterial);
-                ObjectId = new Objects.ObjectIdentifier(Objects.objectTypes.craft, key)
-                physics.addMesh(otherCraftMesh, craft.mass, { CustomProperties: ObjectId });
-                scene.add(otherCraftMesh);
-                PeerBoxes[key][0].roVel = null;
-                physics.setMeshPosition(otherCraftMesh, PeerBoxes[key][0].pos)
-                physics.setMeshVelocity(otherCraftMesh, PeerBoxes[key][0].vel)
-                CollideAbleObjects[key] = otherCraftMesh
-                // physics.setMeshProperties(otherCraftMesh, PeerBoxes[key][0], 0)
+            if (object.ObjectType == Objects.objectTypes.craft && !CollideAbleObjects[key]) {
+                createOtherCraft(key, PeerBoxes[key][0])
             }
         }
     }
 
-    let UUID = null
-    if (PeerBoxes) {
-        for (const key in PeerBoxes) {
-            const object = PeerBoxes[key];
-            if (object.ObjectType == Objects.objectTypes.box) {
-                UUID = object[0].ID.ID
-                break;
-            }
-        }
-    }
+    let UUID = getFirstUuidOfType(PeerBoxes, Objects.objectTypes.box)
 
     let w = 30, w_2 = 15;
     for (let i = 0; i < boxes.count; i++) {
@@ -670,6 +687,21 @@ async function init(PeerBoxes) {
     setInterval(() => UpdateNetworkObjects(), 100)
 
     Network.SetUpdatePacketCallback(applyUpdatesFromNetwork)
+    Network.NewPlayerCallback((newPeerObjects, PeerId) => {
+        console.log(newPeerObjects)
+        if (newPeerObjects[PeerId] && !CollideAbleObjects[PeerId]) {
+            console.log(newPeerObjects[PeerId])
+            createOtherCraft(PeerId, newPeerObjects[PeerId][0])
+        }
+    })
+    Network.PlayerLeftCallback((PeerId) => {
+        console.log(PeerId, CollideAbleObjects[PeerId])
+        removeOtherCraft(PeerId)
+    })
+    Network.addServerChangedCallback(() => {
+        CollisionHandler.updatesPerCollision = NupNetworkUpdatesPerCollision
+    })
+    //NewPlayerCallback, PlayerLeftCallback
 }
 
 function onWindowResize() {
@@ -715,6 +747,8 @@ function UpdateNetworkObjects() {
                 }
             }
             if (element.NeedsUpdated > 0 || element.ID.ObjectType == Objects.objectTypes.craft) {
+                // if (element.NeedsUpdated > 0)
+                //     console.log(element.NeedsUpdated);
                 element.NeedsUpdated--;
                 if (CollideAbleObjects[key]) {
                     let prop = physics.getMeshProperties(CollideAbleObjects[key], index)
@@ -794,9 +828,9 @@ function animate() {
     craftPos.set(camPosition.x, camPosition.y, camPosition.z);
     physics.setMeshPosition(craft.children[0], craftPos);
     physics.setMeshVelocity(craft.children[0], myVelocity);
-    craft.children[0].position.x = craftPos.x / 200;
-    craft.children[0].position.y = craftPos.y / 200;
-    craft.children[0].position.z = craftPos.z / 200;
+    craft.children[0].position.x = craftPos.x / 250;
+    craft.children[0].position.y = craftPos.y / 250;
+    craft.children[0].position.z = craftPos.z / 250;
 
     prevTime = time;
 
