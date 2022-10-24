@@ -8,6 +8,7 @@ const WALL = 1 << 1;
 const BULLET = 1 << 2;
 const GRENADE = 1 << 3;
 const SHRAPNEL = 1 << 4;
+const PROJECTILE_COLLECTION = 1 << 5;
 
 const objectTypes = Object.freeze({
     craft: CRAFT,
@@ -17,6 +18,7 @@ const objectTypes = Object.freeze({
     grenade: GRENADE,
     shrapnel: SHRAPNEL,
     projectile: BULLET || GRENADE || SHRAPNEL,
+    projectileCollection: PROJECTILE_COLLECTION,
 });
 class ObjectIdentifier {
     constructor(objectType, uuid = null, indx = 0) {
@@ -29,7 +31,7 @@ class ObjectIdentifier {
         this.index = indx;
     }
 
-    cloneId(){
+    cloneId() {
         return new ObjectIdentifier(this.ObjectType, this.ID, this.index)
     }
 }
@@ -192,6 +194,58 @@ class Shrapnel extends InstancedProjectile {
     }
 }
 
+class SingleProjectile{
+    constructor(pos, vel){
+        this.pos = pos;
+        this.vel = vel;
+    }
+}
+
+class ProjectileCollection {
+    constructor(cnt, objectType, projectiles,timeout, arrLen = null) {
+        // if ((objectType & objectTypes.projectile) > 0) {
+        //     throw new Error(`invalid object type: ${objectType}`);
+        // }
+        // console.log(cnt, objectType, projectiles, timeout, arrLen)
+        this.ObjectType = objectType;
+        this.Projectiles = projectiles
+        this.ProjectileCount = cnt;
+        this.Timeout = timeout;
+        this.ID = new ObjectIdentifier(objectTypes.projectileCollection, objectType, 0)
+        this.ArrayLength = ProjectileCollection.BaseArrayLength + ProjectileCollection.LengthPerProjectile;
+        if (arrLen) {
+            this.ArrayLength = arrLen;
+        }
+    }
+
+    static BaseArrayLength = 3;
+    static LengthPerProjectile = 6;
+    ToArray() {
+        let data = [objectTypes.projectileCollection, this.ObjectType, this.ProjectileCount, this.Timeout]
+        this.Projectiles.forEach(Projectile => {
+            data = data.concat([
+                Projectile.pos.x, Projectile.pos.y, Projectile.pos.z,
+                Projectile.vel.x, Projectile.vel.y, Projectile.vel.z,
+            ]);
+        });
+        // this.ArrayLength = data.length - 1;
+        // console.log(data);
+        return data;
+    }
+
+    static FromArray(arr) {
+        // console.log(arr);
+        let index = 2;
+        let projectiles = [];
+        while (index <= (arr[1] * ProjectileCollection.LengthPerProjectile) + 1) {
+            projectiles.push(new SingleProjectile(
+                { x: arr[++index], y: arr[++index], z: arr[++index] },
+                { x: arr[++index], y: arr[++index], z: arr[++index] }
+            ))
+        }
+        return new ProjectileCollection(arr[1], arr[0], projectiles, arr[2], index +1);
+    }
+}
 
 let objectKeys = {};
 objectKeys[objectTypes.craft] = Craft.FromArray;
@@ -199,6 +253,7 @@ objectKeys[objectTypes.box] = InstancedCube.FromArray;
 objectKeys[objectTypes.bullet] = Bullet.FromArray;
 objectKeys[objectTypes.grenade] = Grenade.FromArray;
 objectKeys[objectTypes.shrapnel] = Shrapnel.FromArray;
+objectKeys[objectTypes.projectileCollection] = ProjectileCollection.FromArray;
 
 function GenerateObjectFromArray(buffer, offset) {
     var view = new Float32Array(buffer, offset, 1);
@@ -216,4 +271,4 @@ function GenerateObjectFromArray(buffer, offset) {
     }
 }
 
-export { InstancedCube, Craft, Bullet, Grenade, Shrapnel, ObjectDefinition, ObjectIdentifier, objectTypes, GenerateObjectFromArray };
+export { InstancedCube, Craft, Bullet, Grenade, Shrapnel, ObjectDefinition, ObjectIdentifier, ProjectileCollection, SingleProjectile, objectTypes, GenerateObjectFromArray };

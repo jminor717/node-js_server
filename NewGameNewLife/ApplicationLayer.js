@@ -29,7 +29,7 @@ function GenerateStateFromBuffer(buffer) {
         offset += ((obj.ArrayLength + 1) * 4);
         if (output[obj.ID.ID] === null || output[obj.ID.ID] === undefined) {
             output[obj.ID.ID] = {}
-            output[obj.ID.ID].ObjectType = obj.ID.ObjectType
+            // output[obj.ID.ID].ObjectType = obj.ID.ObjectType
         }
         output[obj.ID.ID][obj.ID.index] = obj;
         // console.log(output[obj.ID.ID][obj.ID.index], offset);

@@ -188,7 +188,7 @@ class OffscreenStorage {
         if (this.instancedMesh) {
             let startingPosition = physics.getMeshPosition(this.instancedMesh, index);
             physics.setMeshPosition(this.instancedMesh, this.offscreenPoint(index), index);
-            NetworkedObjects[this.instanceID][this.currentIndex].NeedsUpdated = 2;
+            // NetworkedObjects[this.instanceID][this.currentIndex].NeedsUpdated = 2;
             // this.currentIndex++;
             return startingPosition;
         }
@@ -206,7 +206,7 @@ class OffscreenStorage {
         }
         physics.setMeshPosition(this.instancedMesh, position, this.currentIndex);
         physics.setMeshVelocity(this.instancedMesh, velocity, this.currentIndex);
-        NetworkedObjects[this.instanceID][this.currentIndex].NeedsUpdated = 5;
+        // NetworkedObjects[this.instanceID][this.currentIndex].NeedsUpdated = 5;
 
     }
 
@@ -225,12 +225,19 @@ let ObjectId = new Objects.ObjectIdentifier();
 const defaultBulletStore = new OffscreenStorage(20, 8, 1, Objects.objectTypes.bullet);
 const shrapnelStore = new OffscreenStorage(20, 8, 2, Objects.objectTypes.shrapnel);
 const bombStore = new OffscreenStorage(20, 8, 3, Objects.objectTypes.grenade);
-const ProjectileStores = {
+const ProjectileStoresByDiameter = {
     0.5: shrapnelStore,
     2: defaultBulletStore,
     5: bombStore,
 }
-const GrenadeTimeouts = []
+const ProjectileStoresByType = {};
+ProjectileStoresByType[Objects.objectTypes.bullet] = defaultBulletStore;
+ProjectileStoresByType[Objects.objectTypes.shrapnel] = shrapnelStore;
+ProjectileStoresByType[Objects.objectTypes.grenade] = bombStore;
+
+
+const GrenadeTimeouts = [];
+let bulletsToSend = {};
 
 const CollisionHandler = new callback_ContactCallback(Network.IsServer ? NupNetworkUpdatesPerCollision : 0);
 const AimAbleObjects = [];
@@ -272,7 +279,22 @@ function removeMeshes(Meshes, BulletStore) {
     }
 }
 
-function makeBullet(mass, inertia, speed, craftOffset, objectStore) {
+function makeBullets(ProjectileCollection) {
+    // console.log(ProjectileCollection)
+    Network.QueueObjectToSend({ 0: { 0: ProjectileCollection } })
+
+    let objectStore = ProjectileStoresByType[ProjectileCollection.ObjectType]
+    let indices = [];
+    ProjectileCollection.Projectiles.forEach(Projectile => {
+        objectStore.setLastMeshMeshPosAndVel(Projectile.pos, Projectile.vel);
+        indices.push(objectStore.currentIndex);
+    });
+
+    setTimeout(removeMeshes.bind(null, indices, objectStore), ProjectileCollection.Timeout);
+
+}
+
+function makeBullet(mass, inertia, speed, craftOffset, objectType, timeOut) {
 
     let CurCraftPos = controls.getObject().position;
 
@@ -292,10 +314,10 @@ function makeBullet(mass, inertia, speed, craftOffset, objectStore) {
         bulletVel.applyQuaternion(craft.quaternion);
     }
     bulletVel.add(myVelocity);
-    objectStore.setLastMeshMeshPosAndVel(craftOffset, bulletVel);
-    impartedImpulse.add(bulletVel.multiplyScalar(inertia / craft.inertia));
 
-    return objectStore.currentIndex;
+    makeBullets(new Objects.ProjectileCollection(1, objectType, [new Objects.SingleProjectile(craftOffset, bulletVel)], timeOut))
+
+    impartedImpulse.add(bulletVel.multiplyScalar(inertia / craft.inertia));
 }
 
 function single(mass, inertia, speed, range) {
@@ -303,10 +325,8 @@ function single(mass, inertia, speed, range) {
     craft.currentGunIndex++;
     craft.currentGunIndex = craft.currentGunIndex % craft.gunPositions.length;
 
-    let instancedIndex = makeBullet(mass, inertia, speed, craftOffset, defaultBulletStore)
-
     let time = (range / speed) * 1000
-    setTimeout(removeMesh.bind(null, instancedIndex, defaultBulletStore), time);
+    makeBullet(mass, inertia, speed, craftOffset, Objects.objectTypes.bullet, time)
 }
 
 function DetonateGrenade(index) {
@@ -321,8 +341,8 @@ function DetonateGrenade(index) {
 }
 
 function grenade(mass, inertia, speed, range) {
-    let instancedIndex = makeBullet(mass, inertia, speed, new THREE.Vector3(0, 0, -15), bombStore)
     let time = (range / speed) * 1000;
+    let instancedIndex = makeBullet(mass, inertia, speed, new THREE.Vector3(0, 0, -15), Objects.objectTypes.grenade, time)
     GrenadeTimeouts[instancedIndex] = setTimeout(DetonateGrenade.bind(null, instancedIndex), time);
 }
 
@@ -345,11 +365,9 @@ function shotgun(totalMass, inertia, speed, range, pellets) {
     const spread = 0.5;
     const halfSpread = spread / 2;
 
-
     let CurCraftPos = controls.getObject().position;
     let centerVelocity;
-    let pelletMeshes = [];
-
+    let pelletsList = [];
     for (let i = 0; i < pellets; i++) {
         let randSpread = new THREE.Vector3((Math.random() * spread) - halfSpread, (Math.random() * spread) - halfSpread, (Math.random() * spread) - halfSpread);
         randSpread.applyQuaternion(craft.quaternion)
@@ -364,14 +382,13 @@ function shotgun(totalMass, inertia, speed, range, pellets) {
         centerVelocity = bulletVel.clone()
         bulletVel.add(myVelocity).add(randSpread.clone().multiplyScalar(20));
 
-        shrapnelStore.setLastMeshMeshPosAndVel(craftOffset, bulletVel);
-        pelletMeshes.push(shrapnelStore.currentIndex)
+        pelletsList.push(new Objects.SingleProjectile(craftOffset, bulletVel));
     }
+    let time = (range / speed) * 1000
+    let thing = new Objects.ProjectileCollection(pellets, Objects.objectTypes.shrapnel, pelletsList, time);
+    makeBullets(thing)
 
     impartedImpulse.add(centerVelocity.multiplyScalar(inertia / craft.inertia));
-
-    let time = (range / speed) * 1000
-    setTimeout(removeMeshes.bind(null, pelletMeshes, shrapnelStore), time);
 }
 
 function onDocumentMousedown(event) {
@@ -463,9 +480,9 @@ function CreateProjectiles(radius, numObjects, mass, PeerBoxes) {
     // boxes.receiveShadow = true;
     // objects.push(boxes);
 
-    let UUID = getFirstUuidOfType(PeerBoxes, ProjectileStores[radius].objectType)
+    let UUID = getFirstUuidOfType(PeerBoxes, ProjectileStoresByDiameter[radius].objectType)
 
-    ObjectId = new Objects.ObjectIdentifier(ProjectileStores[radius].objectType, UUID);
+    ObjectId = new Objects.ObjectIdentifier(ProjectileStoresByDiameter[radius].objectType, UUID);
     CollideAbleObjects[ObjectId.ID] = bullets;
     if (radius > 3) {
         AimAbleObjects.push(bullets)
@@ -476,7 +493,7 @@ function CreateProjectiles(radius, numObjects, mass, PeerBoxes) {
     NetworkedObjects[ObjectId.ID] = {}
 
     for (let i = 0; i < bullets.count; i++) {
-        ProjectileStores[radius].storeMesh(bullets, ObjectId.ID)
+        ProjectileStoresByDiameter[radius].storeMesh(bullets, ObjectId.ID)
         let nextId = new Objects.ObjectIdentifier(ObjectId.ObjectType, ObjectId.ID, i)
         if (ObjectId.ObjectType == Objects.objectTypes.bullet) {
             NetworkedObjects[ObjectId.ID][i] = new Objects.Bullet(physics.getMeshProperties(bullets, i), nextId)
@@ -497,7 +514,7 @@ function createOtherCraft(uuid, otherCraft) {
     ObjectId = new Objects.ObjectIdentifier(Objects.objectTypes.craft, uuid)
     physics.addMesh(otherCraftMesh, craft.mass, { CustomProperties: ObjectId });
     scene.add(otherCraftMesh);
-    physics.setMeshPropertiesWORotVel(otherCraftMesh, otherCraft);
+    physics.setMeshProperties(otherCraftMesh, otherCraft);
     CollideAbleObjects[uuid] = otherCraftMesh
 }
 
@@ -513,7 +530,7 @@ function getFirstUuidOfType(ListToSearch, objectType) {
     if (ListToSearch) {
         for (const key in ListToSearch) {
             const object = ListToSearch[key];
-            if (object.ObjectType == objectType) {
+            if (object[0].ID.ObjectType == objectType) {
                 return object[0].ID.ID;
             }
         }
@@ -718,22 +735,22 @@ function applyUpdatesFromNetwork(receivedObjects) {
         for (const index in object) {
             const element = object[index];
             if (CollideAbleObjects[key]) {
-                if (element.pos) {
-                    if ((element.ID.ObjectType & Objects.objectTypes.projectile) > 0) { //element.ID.ObjectType == Objects.objectTypes.craft ||
-                        physics.setMeshPropertiesWORotVel(CollideAbleObjects[key], element, index)
-                    } else {
-                        physics.setMeshProperties(CollideAbleObjects[key], element, index)
-                    }
+                if ((element.ID.ObjectType & Objects.objectTypes.projectile) > 0) { //element.ID.ObjectType == Objects.objectTypes.craft ||
+                    // physics.setMeshPropertiesWORotVel(CollideAbleObjects[key], element, index)
                 } else {
-                    // console.log(element, receivedObjects);
+                    physics.setMeshProperties(CollideAbleObjects[key], element, index)
                 }
+            }
+            if (element.ID.ObjectType == Objects.objectTypes.projectileCollection) {
+                makeBullets(element);
+                // console.log(element, receivedObjects, CollideAbleObjects[key]);
             }
         }
     }
 }
 
 function UpdateNetworkObjects() {
-    let updatedObjects = {};
+    let updatedObjects = bulletsToSend;
     for (const key in NetworkedObjects) {
         const object = NetworkedObjects[key];
         for (const index in object) {
@@ -764,15 +781,13 @@ function UpdateNetworkObjects() {
             }
         }
     }
-    // console.log(updatedObjects, NetworkedObjects )
     if (Object.keys(updatedObjects).length > 0) {
         Network.QueueObjectToSend(updatedObjects)
     }
+    bulletsToSend = {};
 }
 
 function animate() {
-
-
     requestAnimationFrame(animate);
 
     const time = performance.now();
