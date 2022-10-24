@@ -61,10 +61,10 @@ class callback_ContactCallback {
                 O2.setColorAt(Id2.index, color.setHex(0xff0000));
             }
             if (Id2.ObjectType == Objects.objectTypes.grenade) {
-                DetonateGrenade(Id2.index)
+                DetonateGrenade(Id2.index, bombStore)
             }
             if (Id1.ObjectType == Objects.objectTypes.grenade) {
-                DetonateGrenade(Id1.index)
+                DetonateGrenade(Id1.index, bombStore)
             }
 
             // }
@@ -117,6 +117,7 @@ class UserInputState {
             //     canJump = false;
             //     break;
             case 32: single(1, 0.05, 300, 500);
+            case 71: explosion(controls.getObject().position, 1000, 900, 8);
             default:
                 break;
         }
@@ -269,19 +270,29 @@ let craftProperties = {
 }
 
 
-function removeMesh(index, BulletStore) {
-    BulletStore.storeIndexedMesh(index);
-}
-
 function removeMeshes(Meshes, BulletStore) {
     for (let key in Meshes) {
-        removeMesh(Meshes[key], BulletStore);
+        BulletStore.storeIndexedMesh(Meshes[key]);
     }
 }
 
-function makeBullets(ProjectileCollection) {
+function DetonateGrenade(index, BulletStore) {
+    let timeOut = GrenadeTimeouts[index]?.index
+    if (timeOut) {
+        clearTimeout(timeOut)
+        let pos = BulletStore.storeIndexedMesh(index)
+        if (!GrenadeTimeouts[index].fromRemote) {
+            explosion(pos, 300, 900, 5); //box.mass * 
+        }
+        delete GrenadeTimeouts[index];
+    }
+}
+
+function makeBullets(ProjectileCollection, fromRemote = false) {
     // console.log(ProjectileCollection)
-    Network.QueueObjectToSend({ 0: { 0: ProjectileCollection } })
+    if (!fromRemote) {
+        Network.QueueObjectToSend({ 0: { 0: ProjectileCollection } })
+    }
 
     let objectStore = ProjectileStoresByType[ProjectileCollection.ObjectType]
     let indices = [];
@@ -290,7 +301,17 @@ function makeBullets(ProjectileCollection) {
         indices.push(objectStore.currentIndex);
     });
 
-    setTimeout(removeMeshes.bind(null, indices, objectStore), ProjectileCollection.Timeout);
+    if (ProjectileCollection.ObjectType === Objects.objectTypes.grenade) {
+        indices.forEach(index => {
+            GrenadeTimeouts[index] = {};
+            GrenadeTimeouts[index].index = setTimeout(DetonateGrenade.bind(null, index, objectStore), ProjectileCollection.Timeout);
+            GrenadeTimeouts[index].fromRemote = fromRemote;
+        });
+    } else {
+        setTimeout(removeMeshes.bind(null, indices, objectStore), ProjectileCollection.Timeout);
+    }
+
+
 
 }
 
@@ -329,36 +350,26 @@ function single(mass, inertia, speed, range) {
     makeBullet(mass, inertia, speed, craftOffset, Objects.objectTypes.bullet, time)
 }
 
-function DetonateGrenade(index) {
-    let timeOut = GrenadeTimeouts[index]
-    if (timeOut) {
-        clearTimeout(timeOut)
-        GrenadeTimeouts[index] = null;
-        let pos = bombStore.storeIndexedMesh(index)
-        console.log("ekusplotion", index, pos)
-        explosion(pos, 300, 900); //box.mass * 
-    }
-}
-
 function grenade(mass, inertia, speed, range) {
     let time = (range / speed) * 1000;
-    let instancedIndex = makeBullet(mass, inertia, speed, new THREE.Vector3(0, 0, -15), Objects.objectTypes.grenade, time)
-    GrenadeTimeouts[instancedIndex] = setTimeout(DetonateGrenade.bind(null, instancedIndex), time);
+    makeBullet(mass, inertia, speed, new THREE.Vector3(0, 0, -15), Objects.objectTypes.grenade, time)
 }
 
-function explosion(center, numObjects, totalMass) {
+function explosion(center, numObjects, totalMass, minRadius) {
+    console.log("ekusplotion", center, numObjects, minRadius)
     let time = (150 / 300) * 1000
-    let shrapnelMeshes = []
+    // let shrapnelMeshes = []
+    let shrapnelList = [];
     for (let i = 0; i < numObjects; i++) {
-        let offset = new THREE.Vector3((Math.random() * 10) - 5, (Math.random() * 10) - 5, (Math.random() * 10) - 5)
+        let offset = new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize().multiplyScalar(minRadius + (Math.random() * 5))
         let position = new THREE.Vector3(center.x + offset.x, center.y + offset.y, center.z + offset.z)
         let shrapnelVelocity = position.clone().sub(center).normalize().multiplyScalar(400)
         shrapnelVelocity.add(myVelocity);
 
-        shrapnelStore.setLastMeshMeshPosAndVel(position, shrapnelVelocity);
-        shrapnelMeshes.push(shrapnelStore.currentIndex)
+        shrapnelList.push(new Objects.SingleProjectile(position, shrapnelVelocity));
     }
-    setTimeout(removeMeshes.bind(null, shrapnelMeshes, shrapnelStore), time);
+    let thing = new Objects.ProjectileCollection(numObjects, Objects.objectTypes.shrapnel, shrapnelList, time);
+    makeBullets(thing);
 }
 
 function shotgun(totalMass, inertia, speed, range, pellets) {
@@ -392,9 +403,11 @@ function shotgun(totalMass, inertia, speed, range, pellets) {
 }
 
 function onDocumentMousedown(event) {
-    if (event.button == 0) { single(1, 0.05, 300, 500) }
-    if (event.button == 1) { grenade(1, 1, 50, 150) }
-    if (event.button == 2) { shotgun(300, 0.3, 150, 200, 20) }
+    if (controls.isLocked === true) {
+        if (event.button == 0) { single(1, 0.05, 300, 500) }
+        if (event.button == 1) { grenade(1, 1, 50, 150) }
+        if (event.button == 2) { shotgun(300, 0.3, 150, 200, 20) }
+    }
 }
 
 
@@ -742,7 +755,7 @@ function applyUpdatesFromNetwork(receivedObjects) {
                 }
             }
             if (element.ID.ObjectType == Objects.objectTypes.projectileCollection) {
-                makeBullets(element);
+                makeBullets(element, true);
                 // console.log(element, receivedObjects, CollideAbleObjects[key]);
             }
         }

@@ -56,7 +56,7 @@ function receiveData(event, playerId) {
         // console.log('received ArrayBuffer:', event.data.byteLength, ' bytes');
         let stuff = GenerateStateFromBuffer(event.data);
         // console.log(NetworkResolve, stuff)
-        if (event.data.byteLength > 1000) {
+        if (event.data.byteLength > 1000 && NetworkResolve) {
             NetworkResolve(stuff);
         }
         if (!trackedPlayers[playerId]) {
@@ -69,9 +69,6 @@ function receiveData(event, playerId) {
         if (StateReceivedCallBack) {
             StateReceivedCallBack(stuff)
         }
-
-
-
     } else {
         // console.log('received:', event.data.length, ' bytes');
         try {
