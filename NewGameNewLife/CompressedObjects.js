@@ -87,16 +87,13 @@ class InstancedObject extends ObjectDefinition {
         this.hasCollided = false;
         this.NeedsUpdated = 0;
     }
-
-    // Update(prop) {
-    //     super.Update(prop);
-    // }
 }
 
 class InstancedCube extends InstancedObject {
     constructor(prop, id) {
         super(prop, id);
         this.ArrayLength = InstancedCube.ArrayLength;
+        this.PostCollisionUpdates = [-10, -20, -30, -60, -120, -240];
     }
     ToArray() {
         return [objectTypes.box, this.ID.ID, this.ID.index,
@@ -121,78 +118,9 @@ class InstancedCube extends InstancedObject {
 }
 
 
-class InstancedProjectile extends InstancedObject {
-    constructor(prop, id) {
-        super(prop, id);
-    }
-    ToArray(objectType) {
-        return [objectType, this.ID.ID, this.ID.index,
-            this.pos.x, this.pos.y, this.pos.z,
-            this.vel.x, this.vel.y, this.vel.z,]
-    }
-
-    static ArrayLength = 8;
-    static FromArray(arr, objectType) {
-        let uuid = new ObjectIdentifier(objectType, arr[0])
-        uuid.index = arr[1];
-        let prop = {
-            pos: { x: arr[2], y: arr[3], z: arr[4] },
-            vel: { x: arr[5], y: arr[6], z: arr[7] },
-            rot: { x: 0, y: 0, z: 0 },
-            rotVel: { x: 0, y: 0, z: 0, w: 0 },
-        }
-        return { prop: prop, id: uuid };
-    }
-}
 
 
-class Bullet extends InstancedProjectile {
-    constructor(prop, id) {
-        super(prop, id);
-        this.ArrayLength = Bullet.ArrayLength;
-    }
-    ToArray() {
-        return super.ToArray(objectTypes.bullet)
-    }
-
-    static ArrayLength = InstancedProjectile.ArrayLength;
-    static FromArray(arr) {
-        let obj = super.FromArray(arr, objectTypes.bullet)
-        return new Bullet(obj.prop, obj.id);
-    }
-}
-
-class Grenade extends InstancedProjectile {
-    constructor(prop, id) {
-        super(prop, id);
-        this.ArrayLength = Grenade.ArrayLength;
-    }
-    ToArray() {
-        return super.ToArray(objectTypes.grenade)
-    }
-
-    static ArrayLength = InstancedProjectile.ArrayLength;
-    static FromArray(arr) {
-        let obj = super.FromArray(arr, objectTypes.grenade)
-        return new Grenade(obj.prop, obj.id);
-    }
-}
-
-class Shrapnel extends InstancedProjectile {
-    constructor(prop, id) {
-        super(prop, id);
-        this.ArrayLength = Shrapnel.ArrayLength;
-    }
-    ToArray() {
-        return super.ToArray(objectTypes.shrapnel)
-    }
-
-    static ArrayLength = InstancedProjectile.ArrayLength;
-    static FromArray(arr) {
-        let obj = super.FromArray(arr, objectTypes.shrapnel)
-        return new Shrapnel(obj.prop, obj.id);
-    }
-}
+// Objects\.(?!objectTypes)
 
 class SingleProjectile{
     constructor(pos, vel){
@@ -228,8 +156,6 @@ class ProjectileCollection {
                 Projectile.vel.x, Projectile.vel.y, Projectile.vel.z,
             ]);
         });
-        // this.ArrayLength = data.length - 1;
-        // console.log(data);
         return data;
     }
 
@@ -250,9 +176,6 @@ class ProjectileCollection {
 let objectKeys = {};
 objectKeys[objectTypes.craft] = Craft.FromArray;
 objectKeys[objectTypes.box] = InstancedCube.FromArray;
-objectKeys[objectTypes.bullet] = Bullet.FromArray;
-objectKeys[objectTypes.grenade] = Grenade.FromArray;
-objectKeys[objectTypes.shrapnel] = Shrapnel.FromArray;
 objectKeys[objectTypes.projectileCollection] = ProjectileCollection.FromArray;
 
 function GenerateObjectFromArray(buffer, offset) {
@@ -271,4 +194,4 @@ function GenerateObjectFromArray(buffer, offset) {
     }
 }
 
-export { InstancedCube, Craft, Bullet, Grenade, Shrapnel, ObjectDefinition, ObjectIdentifier, ProjectileCollection, SingleProjectile, objectTypes, GenerateObjectFromArray };
+export { InstancedCube, Craft, ObjectDefinition, ObjectIdentifier, ProjectileCollection, SingleProjectile, objectTypes, GenerateObjectFromArray };

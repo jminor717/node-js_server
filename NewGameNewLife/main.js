@@ -189,7 +189,6 @@ class OffscreenStorage {
         if (this.instancedMesh) {
             let startingPosition = physics.getMeshPosition(this.instancedMesh, index);
             physics.setMeshPosition(this.instancedMesh, this.offscreenPoint(index), index);
-            // NetworkedObjects[this.instanceID][this.currentIndex].NeedsUpdated = 2;
             // this.currentIndex++;
             return startingPosition;
         }
@@ -207,8 +206,6 @@ class OffscreenStorage {
         }
         physics.setMeshPosition(this.instancedMesh, position, this.currentIndex);
         physics.setMeshVelocity(this.instancedMesh, velocity, this.currentIndex);
-        // NetworkedObjects[this.instanceID][this.currentIndex].NeedsUpdated = 5;
-
     }
 
     settleQueue() {
@@ -489,9 +486,8 @@ function CreateProjectiles(radius, numObjects, mass, PeerBoxes) {
 
     let bullets = new THREE.InstancedMesh(geometry, bulletMaterial, numObjects);
     bullets.instanceMatrix.setUsage(THREE.DynamicDrawUsage); // will be updated every frame
-    // boxes.castShadow = true;
-    // boxes.receiveShadow = true;
-    // objects.push(boxes);
+    bullets.castShadow = true;
+    // bullets.receiveShadow = true;
 
     let UUID = getFirstUuidOfType(PeerBoxes, ProjectileStoresByDiameter[radius].objectType)
 
@@ -503,18 +499,8 @@ function CreateProjectiles(radius, numObjects, mass, PeerBoxes) {
     scene.add(bullets);
     physics.addMesh(bullets, mass, { CustomProperties: ObjectId }, CollisionHandler);
 
-    NetworkedObjects[ObjectId.ID] = {}
-
     for (let i = 0; i < bullets.count; i++) {
         ProjectileStoresByDiameter[radius].storeMesh(bullets, ObjectId.ID)
-        let nextId = new Objects.ObjectIdentifier(ObjectId.ObjectType, ObjectId.ID, i)
-        if (ObjectId.ObjectType == Objects.objectTypes.bullet) {
-            NetworkedObjects[ObjectId.ID][i] = new Objects.Bullet(physics.getMeshProperties(bullets, i), nextId)
-        } else if (ObjectId.ObjectType == Objects.objectTypes.grenade) {
-            NetworkedObjects[ObjectId.ID][i] = new Objects.Grenade(physics.getMeshProperties(bullets, i), nextId)
-        } else if (ObjectId.ObjectType == Objects.objectTypes.shrapnel) {
-            NetworkedObjects[ObjectId.ID][i] = new Objects.Shrapnel(physics.getMeshProperties(bullets, i), nextId)
-        }
     }
 }
 
@@ -768,18 +754,8 @@ function UpdateNetworkObjects() {
         const object = NetworkedObjects[key];
         for (const index in object) {
             const element = object[index];
-            if (element.hasCollided) {
-                if (CollideAbleObjects[key]) {
-                    let prop = physics.getMeshProperties(CollideAbleObjects[key], index)
-                    element.Update(prop);
-                } else {
-                    console.log(key)
-                }
-            }
-            if (element.NeedsUpdated > 0 || element.ID.ObjectType == Objects.objectTypes.craft) {
-                // if (element.NeedsUpdated > 0)
-                //     console.log(element.NeedsUpdated);
-                element.NeedsUpdated--;
+            let OutOfBandUpdate = Network.IsServer && element.hasCollided && element.PostCollisionUpdates && element.PostCollisionUpdates.includes(element.NeedsUpdated);
+            if (element.NeedsUpdated > 0 || element.ID.ObjectType == Objects.objectTypes.craft || OutOfBandUpdate) {
                 if (CollideAbleObjects[key]) {
                     let prop = physics.getMeshProperties(CollideAbleObjects[key], index)
                     element.Update(prop);
@@ -792,6 +768,7 @@ function UpdateNetworkObjects() {
                 }
                 updatedObjects[key][index] = element;
             }
+            element.NeedsUpdated--;
         }
     }
     if (Object.keys(updatedObjects).length > 0) {
