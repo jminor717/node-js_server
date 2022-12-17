@@ -182,6 +182,16 @@ function SetNetworkReady(id) {
 
 function onReceiveMessageCallback(event, id) {
     if (ReceiveCallback) {
+        if (IsServer) {
+            for (const key in clients) {
+                if (key != id && Object.hasOwnProperty.call(clients, key)) {
+                    const element = clients[key];
+                    if (element.ReadyToSend) {
+                        element.sendChannel.send(event.data);
+                    }
+                }
+            }
+        }
         ReceiveCallback(event, id);
     }
     // console.log('Current Throughput is:', event.data.length, 'bytes/sec');

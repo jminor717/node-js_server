@@ -147,6 +147,18 @@ function setMeshVelocity(mesh, velocity, index = 0) {
 	}
 }
 
+function setMeshRotation(mesh, rot, index = 0) {
+	if (mesh.isInstancedMesh) {
+		const bodies = meshMap.get(mesh);
+		const body = bodies[index];
+
+		// body.setOrientation(rot);
+	} else if (mesh.isMesh) {
+		const body = meshMap.get(mesh);
+		// body.setRotationXyz(rot);
+	}
+}
+
 function getMeshProperties(mesh, index = 0) {
 	if (mesh.isInstancedMesh) {
 		const bodies = meshMap.get(mesh);
@@ -274,6 +286,7 @@ export {
 	getMeshPosition,
 	getMeshVelocity,
 	setMeshVelocity,
+	setMeshRotation,
 	getMeshProperties,
 	setMeshProperties,
 	setMeshPropertiesWORotVel

@@ -508,6 +508,13 @@ function createOtherCraft(uuid, otherCraft) {
     const otherCraftGeometry = new THREE.IcosahedronGeometry(7, 2);//.toNonIndexed();
     const otherCraftMaterial = new THREE.MeshLambertMaterial();
     const otherCraftMesh = new THREE.Mesh(otherCraftGeometry, otherCraftMaterial);
+    const geometry = new THREE.CylinderGeometry(1.5, 1.5, 3, 16);
+    const material = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+    const cylinder = new THREE.Mesh(geometry, material);
+    cylinder.position.x = 0;
+    cylinder.position.y = 0;
+    cylinder.position.z = -10;
+    otherCraftMesh.add(cylinder);
     otherCraftMesh.castShadow = true;
     otherCraftMesh.receiveShadow = true;
     ObjectId = new Objects.ObjectIdentifier(Objects.objectTypes.craft, uuid)
@@ -554,6 +561,13 @@ async function init(PeerBoxes) {
     const craftMaterial = new THREE.MeshLambertMaterial();
     const craftMesh = new THREE.Mesh(craftGeometry, craftMaterial);
     craftMesh.position.y = 0;
+    const cylinderGeometry = new THREE.CylinderGeometry(1.5, 1.5, 3, 16);
+    const cylinderMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+    const cylinder = new THREE.Mesh(cylinderGeometry, cylinderMaterial);
+    cylinder.position.x = 0;
+    cylinder.position.y = 0;
+    cylinder.position.z = -10;
+    craftMesh.add(cylinder);
     craftMesh.castShadow = true;
     // scene.add(craftMesh);
     //physics.addMesh(craftMesh, 1);
@@ -704,7 +718,7 @@ async function init(PeerBoxes) {
 
     Network.SetUpdatePacketCallback(applyUpdatesFromNetwork)
     Network.NewPlayerCallback((newPeerObjects, PeerId) => {
-        console.log(newPeerObjects)
+        console.log("New Player",newPeerObjects)
         if (newPeerObjects[PeerId] && !CollideAbleObjects[PeerId]) {
             console.log(newPeerObjects[PeerId])
             createOtherCraft(PeerId, newPeerObjects[PeerId][0])
@@ -749,7 +763,7 @@ function applyUpdatesFromNetwork(receivedObjects) {
 }
 
 function UpdateNetworkObjects() {
-    let updatedObjects = bulletsToSend;
+    let updatedObjects = {};// bulletsToSend;
     for (const key in NetworkedObjects) {
         const object = NetworkedObjects[key];
         for (const index in object) {
@@ -758,6 +772,9 @@ function UpdateNetworkObjects() {
             if (element.NeedsUpdated > 0 || element.ID.ObjectType == Objects.objectTypes.craft || OutOfBandUpdate) {
                 if (CollideAbleObjects[key]) {
                     let prop = physics.getMeshProperties(CollideAbleObjects[key], index)
+                    if (element.ID.ObjectType == Objects.objectTypes.craft) {
+                        prop.rot = craft.rotation;
+                    }
                     element.Update(prop);
                 } else {
                     console.log("NeedsUpdated", key)
@@ -774,7 +791,7 @@ function UpdateNetworkObjects() {
     if (Object.keys(updatedObjects).length > 0) {
         Network.QueueObjectToSend(updatedObjects)
     }
-    bulletsToSend = {};
+    // bulletsToSend = {};
 }
 
 function animate() {
@@ -831,6 +848,7 @@ function animate() {
     camPosition.z += (myVelocity.z * delta);
 
     craftPos.set(camPosition.x, camPosition.y, camPosition.z);
+    // physics.setMeshRotation(craft.children[0], craft.quaternion.clone().normalize());
     physics.setMeshPosition(craft.children[0], craftPos);
     physics.setMeshVelocity(craft.children[0], myVelocity);
     craft.children[0].position.x = craftPos.x / 250;
