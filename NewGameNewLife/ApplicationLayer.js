@@ -52,6 +52,7 @@ function isAbv(value) {
 }
 
 function receiveData(event, playerId) {
+    console.log('received event:', event);
     if (isAbv(event.data)) {
         // console.log('received ArrayBuffer:', event.data.byteLength, ' bytes');
         let stuff = GenerateStateFromBuffer(event.data);
@@ -73,9 +74,9 @@ function receiveData(event, playerId) {
         // console.log('received:', event.data.length, ' bytes');
         try {
             let data = JSON.parse(event.data)
-            if (data?.cmd) {
+            // if (data?.cmd) {
                 console.log(data);
-            }
+            // }
         } catch (error) {
             try {
                 console.log('received:', event.data.length, ' bytes string', event.data);
@@ -107,7 +108,7 @@ async function WaitForConnection() {
         NetworkReject = reject;
     });
 
-    setTimeout(() => NetworkReject(), 5000) //Math.floor(Math.random() * 3000)
+    setTimeout(() => NetworkReject("timeout"), 10000) //Math.floor(Math.random() * 3000)
 
     return await WaitForOtherInit;
 
@@ -118,6 +119,15 @@ function QueueObjectToSend(obj) {
     // console.log("Que_ing", llNetwork.ReadyToSend, SendQueue)
     if (llNetwork.ReadyToSend) {
         FlushSendQueue();
+    }
+}
+
+function SendJson(obj){
+    console.log(llNetwork.ReadyToSend, "Sending", obj)
+
+    if (llNetwork.ReadyToSend) {
+        console.log("Sending", obj)
+        llNetwork.sendData(JSON.stringify(obj))
     }
 }
 
@@ -144,4 +154,4 @@ function PlayerLeftCallback(cb) {
 
 
 export { IsServer, MyClientID, addServerChangedCallback } from './transportLayer.js'
-export { WaitForConnection, QueueObjectToSend, SetFullStateObject, SetUpdatePacketCallback, NewPlayerCallback, PlayerLeftCallback }
+export { WaitForConnection, QueueObjectToSend, SetFullStateObject, SetUpdatePacketCallback, NewPlayerCallback, PlayerLeftCallback, SendJson }

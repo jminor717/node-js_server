@@ -248,6 +248,7 @@ app.get(/^(.+)$/, function (req, res) {
             case "/index": index(req, res); break;
             case "/mygame": game(req, res); break;
             case "/NewGameNewLife": newGame(req, res); break;
+            case "/TestNetwork": TestNetwork(req, res); break;
             case "/pong": pong(req, res); break;
             default:
                 //console.log('static file request : ' + JSON.stringify(req.params));
@@ -273,6 +274,11 @@ function game(req, res) {
 function newGame(req, res) {
     //console.log('static file request : ' + "/mygame/misc_controls_pointerlock.html");
     res.sendFile(__dirname + "/NewGameNewLife/NGNL.html");
+}
+
+function TestNetwork(req, res) {
+    //console.log('static file request : ' + "/mygame/misc_controls_pointerlock.html");
+    res.sendFile(__dirname + "/NewGameNewLife/networkTester.html");
 }
 function pong(req, res) {
     //console.log('static file request : ' + "/mygame/pong3.html");

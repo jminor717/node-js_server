@@ -11,7 +11,7 @@ const ClientID = Math.floor(Math.random() * Math.pow(2, 22))
 
 const signaling = new BroadcastChannel('webrtc');
 signaling.onmessage = e => {
-    // console.log(e, e.data);
+     console.log(e, e.data); // 
     // if (!localStream) {
     //     console.log('not ready yet');
     //     return;
@@ -94,6 +94,7 @@ async function handleCandidate(candidate) {
         console.error('no peerconnection');
         return;
     }
+    console.log(candidate)
     if (!candidate.candidate) {
         await clients[candidate.ClientID].pc.addIceCandidate(null);
     } else {
@@ -110,6 +111,7 @@ function createPeerConnection(data) {
     clients[data.ClientID].ReadyState = null;
     clients[data.ClientID].ReadyToSend = false;
     clients[data.ClientID].OpenCallbackCalled = false;
+    clients[data.ClientID].CachedCandidate = {}
 
     clients[data.ClientID].pc.onicecandidate = e => {
         const message = {
@@ -118,9 +120,17 @@ function createPeerConnection(data) {
             ClientID: ClientID
         };
         if (e.candidate) {
+            console.log(e);
+            clients[data.ClientID].CachedCandidate = e.candidate;
+
             message.candidate = e.candidate.candidate;
             message.sdpMid = e.candidate.sdpMid;
             message.sdpMLineIndex = e.candidate.sdpMLineIndex;
+        }else{
+            console.log("bad event", e, clients[data.ClientID].CachedCandidate);
+            message.candidate = clients[data.ClientID].CachedCandidate.candidate;
+            message.sdpMid = clients[data.ClientID].CachedCandidate.sdpMid;
+            message.sdpMLineIndex = clients[data.ClientID].CachedCandidate.sdpMLineIndex;
         }
         signaling.postMessage(message);
     };
@@ -161,7 +171,7 @@ function onSendChannelOpen(id) {
             clearInterval(clients[id].sendInterval);
             return;
         } else {
-            // console.log("-------------------", clients[id].ReadyState);
+            console.log("-------------------", clients[id].ReadyState); // 
             clients[id].sendChannel.send(clients[id].ReadyState);
         }
     }, 1000);
@@ -181,12 +191,15 @@ function SetNetworkReady(id) {
 
 
 function onReceiveMessageCallback(event, id) {
+    console.log('Current Throughput is:', event.data.length, 'bytes/sec'); // 
+    
     if (ReceiveCallback) {
         if (IsServer) {
             for (const key in clients) {
                 if (key != id && Object.hasOwnProperty.call(clients, key)) {
                     const element = clients[key];
                     if (element.ReadyToSend) {
+                        console.log("-----------senddd--------", event.data); // 
                         element.sendChannel.send(event.data);
                     }
                 }
@@ -194,12 +207,12 @@ function onReceiveMessageCallback(event, id) {
         }
         ReceiveCallback(event, id);
     }
-    // console.log('Current Throughput is:', event.data.length, 'bytes/sec');
     if (event.data === "AmReady") {
         clients[id].ReadyState = "AcknowledgeReady"
     }
     if (event.data === "AcknowledgeReady") {
         clients[id].ReadyState = "done"
+        console.log("-----------se--------", event.data); // 
         clients[id].sendChannel.send(clients[id].ReadyState);
         clearInterval(clients[id].sendInterval);
         SetNetworkReady(id);
@@ -251,7 +264,7 @@ async function ContactServer() {
         NetworkFoundResolve = resolve;
         NetworkFoundReject = reject;
     });
-    setTimeout(() => NetworkFoundReject(), 5000)
+    setTimeout(() => NetworkFoundReject("timeout ll"), 10000)
     signaling.postMessage({ type: 'ready', ClientID: ClientID });
 }
 
