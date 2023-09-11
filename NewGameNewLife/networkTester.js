@@ -8,9 +8,7 @@ const SendData = {
     i: 0,
     message: "hi"
 };
-let MyPeer;
 let otherIdd;
-let ServerConn;
 let connections = []
 
 
@@ -34,24 +32,18 @@ let connections = []
 
 
 function initConnection() {
-    SendData.i++;
     if (!init) {
         init = true;
         start(ServerId);
+        return;
     }
+    SendData.i++;
 
-    // if (!ServerConn && MyPeer){
-    //     ServerConn = MyPeer.connect(otherIdd);
-    //     SetupConnection(ServerConn)
-    // }
-    // console.log(ServerConn)
+
     connections.forEach(con => {
         con.send(SendData);
 
     })
-    //Network.SendJson(SendData);
-    // var conn = peer.connect(otherId);
-
 }
 
 function SetupConnection(conn){
