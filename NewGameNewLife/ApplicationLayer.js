@@ -52,7 +52,7 @@ function isAbv(value) {
 }
 
 function receiveData(event, playerId) {
-    console.log('received event:', event);
+    // console.log('received event:', event); 
     if (isAbv(event.data)) {
         // console.log('received ArrayBuffer:', event.data.byteLength, ' bytes');
         let stuff = GenerateStateFromBuffer(event.data);
@@ -81,7 +81,7 @@ function receiveData(event, playerId) {
             try {
                 console.log('received:', event.data.length, ' bytes string', event.data);
                 if (FullState) {
-                    console.log("sending Full State 1", FullState)
+                    // console.log("sending Full State 1", FullState)
                     //llNetwork.sendData(Float32Array.from(GenerateNetworkPacket(FullState)).buffer)
                 }
             } catch (error2) {
@@ -97,7 +97,7 @@ async function WaitForConnection() {
     llNetwork.addSendChannelReadyCallback(() => {
         FlushSendQueue();
         if (FullState) {
-            console.log("sending Full State 2", FullState)
+            // console.log("sending Full State 2", FullState)
             llNetwork.sendData(Float32Array.from(GenerateNetworkPacket(FullState)).buffer)
         }
     })
@@ -125,10 +125,9 @@ function QueueObjectToSend(obj) {
 function SendJson(obj){
     console.log(llNetwork.ReadyToSend, "Sending", obj)
 
-    if (llNetwork.ReadyToSend) {
-        console.log("Sending", obj)
+    // if (llNetwork.ReadyToSend) {
         llNetwork.sendData(JSON.stringify(obj))
-    }
+    // }
 }
 
 function SetFullStateObject(obj) {

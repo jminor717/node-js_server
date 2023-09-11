@@ -146,16 +146,28 @@ function setMeshVelocity(mesh, velocity, index = 0) {
 		body.setLinearVelocity(new OIMO.Vec3(velocity.x, velocity.y, velocity.z));
 	}
 }
+function setMeshRotationVelocity(mesh, rotVel, index = 0) {
+	if (mesh.isInstancedMesh) {
+		const bodies = meshMap.get(mesh);
+		const body = bodies[index];
+
+		body.setAngularVelocity(new OIMO.Vec3(rotVel.x, rotVel.y, rotVel.z));
+	} else if (mesh.isMesh) {
+		const body = meshMap.get(mesh);
+		body.setAngularVelocity(new OIMO.Vec3(rotVel.x, rotVel.y, rotVel.z));
+	}
+}
+
 
 function setMeshRotation(mesh, rot, index = 0) {
 	if (mesh.isInstancedMesh) {
 		const bodies = meshMap.get(mesh);
 		const body = bodies[index];
 
-		// body.setOrientation(rot);
+		body.setOrientation(rot);
 	} else if (mesh.isMesh) {
 		const body = meshMap.get(mesh);
-		// body.setRotationXyz(rot);
+		body.setOrientation(rot);
 	}
 }
 
@@ -287,6 +299,7 @@ export {
 	getMeshVelocity,
 	setMeshVelocity,
 	setMeshRotation,
+	setMeshRotationVelocity,
 	getMeshProperties,
 	setMeshProperties,
 	setMeshPropertiesWORotVel

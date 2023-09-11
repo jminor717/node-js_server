@@ -4,7 +4,7 @@ const port = 8080
 //const app = express()
 var app = require('express')()
 const bodyParser = require('body-parser');
-app.listen(port, function () {
+app.listen(port, '0.0.0.0', function () {
     console.log("Listening on " + port);
 });
 app.use(bodyParser.json());
@@ -34,6 +34,11 @@ const wss = new WebSocket.Server({
         // should not be compressed.
     }
 });
+
+
+const { PeerServer } = require("peer");
+
+const peerServer = PeerServer({ port: 9000, path: "/myapp" });
 
 var scene = null;
 var clients = [], updates = [], clientId = 1;

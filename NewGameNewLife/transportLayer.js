@@ -11,36 +11,36 @@ const ClientID = Math.floor(Math.random() * Math.pow(2, 22))
 
 const signaling = new BroadcastChannel('webrtc');
 signaling.onmessage = e => {
-     console.log(e, e.data); // 
+    console.log(e, e.data);
     // if (!localStream) {
     //     console.log('not ready yet');
     //     return;
     // }
     switch (e.data.type) {
         case 'offer':
-            FoundServer = true;
+            // FoundServer = true;
             handleOffer(e.data);
             break;
         case 'answer':
-            if (FoundServer) {
-                console.log('not the server, ignoring');
-                return;
-            }
+            // if (FoundServer) {
+            //     console.log('not the server, ignoring');
+            //     return;
+            // }
             handleAnswer(e.data);
             break;
         case 'candidate':
-            if (FoundServer) {
-                console.log('not the server, ignoring');
-                return;
-            }
+            // if (FoundServer) {
+            //     console.log('not the server, ignoring');
+            //     return;
+            // }
             handleCandidate(e.data);
             break;
         case 'ready':
             // A second tab joined. This tab will initiate a call unless in a call already.
-            if (FoundServer && Object.keys(clients).length > 0) {
-                console.log('not the server, ignoring');
-                return;
-            }
+            // if (FoundServer && Object.keys(clients).length > 0) {
+            //     console.log('not the server, ignoring');
+            //     return;
+            // }
             FoundServer = false;
             console.log("becoming server")
             IsServer = true;
@@ -94,7 +94,7 @@ async function handleCandidate(candidate) {
         console.error('no peerconnection');
         return;
     }
-    console.log(candidate)
+    // console.log(candidate);
     if (!candidate.candidate) {
         await clients[candidate.ClientID].pc.addIceCandidate(null);
     } else {
@@ -120,7 +120,7 @@ function createPeerConnection(data) {
             ClientID: ClientID
         };
         if (e.candidate) {
-            console.log(e);
+            // console.log(e);
             clients[data.ClientID].CachedCandidate = e.candidate;
 
             message.candidate = e.candidate.candidate;
@@ -171,7 +171,7 @@ function onSendChannelOpen(id) {
             clearInterval(clients[id].sendInterval);
             return;
         } else {
-            console.log("-------------------", clients[id].ReadyState); // 
+            // console.log("-------------------", clients[id].ReadyState);
             clients[id].sendChannel.send(clients[id].ReadyState);
         }
     }, 1000);
@@ -191,20 +191,20 @@ function SetNetworkReady(id) {
 
 
 function onReceiveMessageCallback(event, id) {
-    console.log('Current Throughput is:', event.data.length, 'bytes/sec'); // 
+    // console.log('Current Throughput is:', event.data.length, 'bytes/sec');
     
     if (ReceiveCallback) {
-        if (IsServer) {
-            for (const key in clients) {
-                if (key != id && Object.hasOwnProperty.call(clients, key)) {
-                    const element = clients[key];
-                    if (element.ReadyToSend) {
-                        console.log("-----------senddd--------", event.data); // 
-                        element.sendChannel.send(event.data);
-                    }
-                }
-            }
-        }
+        // if (IsServer) {
+        //     for (const key in clients) {
+        //         if (key != id && Object.hasOwnProperty.call(clients, key)) {
+        //             const element = clients[key];
+        //             if (element.ReadyToSend) {
+        //                 // console.log("-----------senddd--------", event.data);
+        //                 element.sendChannel.send(event.data);
+        //             }
+        //         }
+        //     }
+        // }
         ReceiveCallback(event, id);
     }
     if (event.data === "AmReady") {
@@ -212,7 +212,7 @@ function onReceiveMessageCallback(event, id) {
     }
     if (event.data === "AcknowledgeReady") {
         clients[id].ReadyState = "done"
-        console.log("-----------se--------", event.data); // 
+        // console.log("-----------se--------", event.data);
         clients[id].sendChannel.send(clients[id].ReadyState);
         clearInterval(clients[id].sendInterval);
         SetNetworkReady(id);
@@ -265,18 +265,21 @@ async function ContactServer() {
         NetworkFoundReject = reject;
     });
     setTimeout(() => NetworkFoundReject("timeout ll"), 10000)
-    signaling.postMessage({ type: 'ready', ClientID: ClientID });
+    //  signaling.postMessage({ type: 'ready', ClientID: ClientID });
 }
 
 function sendData(data) {
-    for (const key in clients) {
-        if (Object.hasOwnProperty.call(clients, key)) {
-            const element = clients[key];
-            if (element.ReadyToSend) {
-                element.sendChannel.send(data);
-            }
-        }
-    }
+    signaling.postMessage(data);
+    // signaling.postMessage({ type: 'ready', ClientID: ClientID });
+
+    // for (const key in clients) {
+    //     if (Object.hasOwnProperty.call(clients, key)) {
+    //         const element = clients[key];
+    //         if (element.ReadyToSend) {
+    //             element.sendChannel.send(data);
+    //         }
+    //     }
+    // }
 
 }
 

@@ -1,6 +1,7 @@
 {
     "editor.renderWhitespace": "all",
     "cSpell.words": [
-        "Collisiontarget"
+        "Collisiontarget",
+        "peerjs"
     ]
 }
