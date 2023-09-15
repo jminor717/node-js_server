@@ -1,5 +1,5 @@
 //const express = require('express')
-const port = 8080
+const port = 8082
 //express.Router.call()
 //const app = express()
 var app = require('express')()
@@ -239,6 +239,26 @@ app.post("/school" + /^(.+)$/, function (req, res) {
     school.handlepostRequest(req, res)
 });
 
+let IDs = [];
+app.post("/PeerIdUpdate", function (req, res) {
+    /* some server side logic */
+    console.log(req.body);
+    if (req.body.myId && !IDs.includes(req.body.myId)) {
+        IDs.push(req.body.myId)
+    }
+    if (req.body.RemoveId){
+        const index = IDs.indexOf(req.body.RemoveId);
+        if (index > -1) { // only splice array when item is found
+            IDs.splice(index, 1); // 2nd parameter means remove one item only
+        }
+    }
+    res.send({ ids: IDs });
+});
+
+app.get("/PeerIds", function (req, res) {
+    /* some server side logic */
+    res.send({ ids: IDs });
+});
 
 /* serves all the static files */
 app.get(/^(.+)$/, function (req, res) {

@@ -1,20 +1,16 @@
-// import * as Network from './ApplicationLayer.js';
 let init = false;
 
+const GET_OTHER_PLAYERS_FROM_NODE = true;
 const SERVER_ID = "Test_Server_ID_2f3567ed-fdf9-4792-900b-997af04c5d71";
 
 const NetworkedObjects = {}
-const SendData = {
-    i: 0,
-    message: "hi"
-};
+
 let AmServer = false;
 let SelfPeer;
 let MY_ID = "";
 let connections = [];
 
 
-let currentSession;
 
 const MESSAGE_TYPES = {
     ConInit: "initialConnect",
@@ -22,12 +18,29 @@ const MESSAGE_TYPES = {
     ServerArbitrage: "ServerArbitrage"
 }
 
+// const peer = new Peer("someid", {
+//     host: "localhost",
+//     port: 9000,
+//     path: "/myapp",
+// });
 
 class VotingSession {
-    constructor() {
-        this.start = Date.now() - 5000;
-        this.end = Date.now() + 5000;
-        this.vote = Math.floor(Math.random() * 268435456)
+    constructor(remoteSession= null, id= null) {
+        if (remoteSession === null &&  id === null) {
+            this.start = Date.now() - 5000;
+            this.end = Date.now() + 5000;
+            this.castVote();
+            this.otherVotes = [];
+        }else{
+            this.start = remoteSession.start;
+            this.end = remoteSession.end;
+            this.vote = null;
+            this.otherVotes = [{ vote: remoteSession.vote, id: id }];
+        }
+    }
+
+    castVote(){
+        this.vote = Math.floor(Math.random() * 268435456);
     }
 
     /**
@@ -36,9 +49,6 @@ class VotingSession {
      * @param {string} id 
      */
     addOtherSession(other, id) {
-        if (!this.otherVotes) {
-            this.otherVotes = [];
-        }
         if (this.start > other.start) {
             this.start = other.start;
         }
@@ -61,42 +71,33 @@ class VotingSession {
     IsActive() { return Date.now() > this.start && Date.now() < this.end };
 }
 
-// import * as Peer from "./../node_modules/peerjs/dist/peerjs.js";
-
-// const peer = new Peer.Peer("pick-an-id");
-
-// const peer = new Peer("someid", {
-//     host: "localhost",
-//     port: 9000,
-//     path: "/myapp",
-// });
+let currentSession = new VotingSession();
 
 
-// const conn = peer.connect("someid");
+function forceServer() {
 
-// conn.on("open", () => {
-//     WindowLog("open");
-//     conn.send("hi!");
-// });
+}
 
+
+const SendData = {
+    i: 0,
+    message: "hi"
+};
 
 function initConnection() {
     if (!init) {
         init = true;
-        start(SERVER_ID);
+        start(!GET_OTHER_PLAYERS_FROM_NODE);
         return;
     }
     SendData.i++;
-
-
     Broadcast(SendData)
-    // console.log(connections)
 }
 
 function Broadcast(message, excludeList = []) {
     for (const key in connections) {
         if (connections.hasOwnProperty.call(connections, key)) {
-            if (!excludeList.includes(key)){
+            if (!excludeList.includes(key)) {
                 const con = connections[key];
                 con.send(message);
             }
@@ -108,8 +109,8 @@ function Broadcast(message, excludeList = []) {
 function SetupConnection(conn, Id) {
     let peerID = "";
     if (Id) {
-        peerID = id;
-        connections[Id] = conn;
+        peerID = Id;
+        connections[peerID] = conn;
     }
     // console.log(conn);
     conn.on("data", (data) => {
@@ -118,11 +119,11 @@ function SetupConnection(conn, Id) {
 
         if (data.type === MESSAGE_TYPES.ConInit) {
             peerID = data.data
+            connections[peerID] = conn;
+
             if (AmServer) {
-                // broadcast before updating the list of clients so we don't send this message to the new client
                 Broadcast({ type: MESSAGE_TYPES.ConForwarding, data: [peerID] }, [peerID]);
             }
-            connections[peerID] = conn;
         }
         if (data.type === MESSAGE_TYPES.ConForwarding) {
             for (const OtherId of data.data) {
@@ -134,21 +135,25 @@ function SetupConnection(conn, Id) {
             if (currentSession?.IsActive()) {
                 let newServerId = currentSession.addOtherSession(data.data, peerID)
                 if (newServerId === true) {
-                    SelfPeer = null;
-                    start(SERVER_ID)
+                    if (GET_OTHER_PLAYERS_FROM_NODE) {
+                        AmServer = true;
+                    } else {
+                        SelfPeer = null;
+                        start(true)
+                    }
                 } else {
                     connections[newServerId].IsServer = true
+                    console.log(newServerId, connections)
                 }
-
+            }else{
+                currentSession = new VotingSession(data.data, peerID);
             }
         }
     });
     conn.on("open", () => {
         // send my id to the other end,
         // this is necessary because the server doesn't know the ids of clients that are connecting to it
-        if (peerID == SERVER_ID ) {
-            conn.send({ type: MESSAGE_TYPES.ConInit, data: MY_ID });
-        }
+        conn.send({ type: MESSAGE_TYPES.ConInit, data: MY_ID });
         if (AmServer && Object.keys(connections).length > 0) {
             // the server should send a list of all the other clients it has to this client so that all clients are aware of eachother
             conn.send({ type: MESSAGE_TYPES.ConForwarding, data: Object.keys(connections) });
@@ -157,17 +162,29 @@ function SetupConnection(conn, Id) {
 
     conn.on("close", () => {
         WindowLog(`disconnected: ${Id}`);
+        sendPeerIdUpdate({ RemoveId: Id });
         connections[Id] = null;
         delete connections[Id];
-        if (!connections.some(x = x.IsServer) && !AmServer) {
+        console.log(connections.some(x => x.IsServer), connections)
+        if (!connections.some(x => x.IsServer) && !AmServer) {
             WindowLog(`need new server`);
+            console.log(connections)
             if (Object.keys(connections).length == 0) {
                 // no active connections assume the server role
-                SelfPeer = null;
-                start(SERVER_ID)
+                // SelfPeer = null;
+                WindowLog("becoming Server by default")
+                if (GET_OTHER_PLAYERS_FROM_NODE) {
+                    AmServer = true;
+                } else {
+                    start(true)
+                }
             } else {
                 // other active connection that need to be negotiated with for server role
-                currentSession = new VotingSession();
+                if (currentSession.IsActive()) {
+                    currentSession.castVote()
+                }else{
+                    currentSession = new VotingSession();
+                }
                 Broadcast({ type: MESSAGE_TYPES.ServerArbitrage, data: currentSession })
             }
         }
@@ -175,24 +192,46 @@ function SetupConnection(conn, Id) {
     });
 }
 
-// Call start() to initiate.
-async function start(ConId) {
+async function start(AsServer) {
+    let ConId = AsServer ? SERVER_ID : `PEER_${uuidv4()}`;
+    console.log(`start ${ConId}`)
     SelfPeer = new Peer(ConId);
-    console.log("fin");
+
     SelfPeer.on('open', function (id) {
-        WindowLog('My peer ID is: ' + id);
+        AmServer = AsServer;
         MY_ID = id;
-        AmServer = MY_ID == SERVER_ID;
-        if (!AmServer) {
-            let ServerConn = SelfPeer.connect(SERVER_ID);
-            SetupConnection(ServerConn, SERVER_ID)
+
+        WindowLog('My peer ID is: ' + id);
+        sendPeerIdUpdate({ myId: MY_ID });
+
+        if (GET_OTHER_PLAYERS_FROM_NODE) {
+            GetPeersFromNode().then(x => {
+                x.ids.forEach(id => {
+                    if (id != MY_ID) {
+                        let peerConn = SelfPeer.connect(id);
+                        SetupConnection(peerConn, id)
+                    }
+                })
+            })
+        } else {
+            if (!AmServer) {
+                let ServerConn = SelfPeer.connect(SERVER_ID);
+                SetupConnection(ServerConn, SERVER_ID)
+            }
         }
+
     });
     SelfPeer.on('error', (err) => {
         if (err.type == "unavailable-id") {
             SelfPeer = null;
-            start(`PEER_${uuidv4()}`)
+            start(false)
         } else if (err.type == "peer-unavailable") {
+            if (GET_OTHER_PLAYERS_FROM_NODE) {
+                let errData = err.message.split("Could not connect to peer ");
+                if (errData[1]){
+                    sendPeerIdUpdate({ RemoveId: errData[1] })
+                }
+            }
             // ServerConn = null;
         } else {
             console.log(err);
@@ -207,10 +246,35 @@ function uuidv4() {
     );
 }
 
+function sendPeerIdUpdate(body) {
+    if (GET_OTHER_PLAYERS_FROM_NODE){
+        console.log("sending Peer Update", body)
+        fetch("PeerIdUpdate",
+            {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(body),
+            })
+            .then(function (res) { return res.json(); })
+            .then(function (data) { console.log(JSON.stringify(data)) })
+    }
 
+}
+
+/**
+ * @returns {Promise<{ ids: [number] }>} the list of active ids known by Node
+ */
+function GetPeersFromNode() {
+    return fetch("PeerIds",
+        {
+            method: "GET",
+        })
+        .then(function (res) { return res.json(); })
+}
 
 
 window.initConnection = initConnection
+window.forceServer = forceServer
 
 
 const consoleDiv = document.getElementById("Console__");
