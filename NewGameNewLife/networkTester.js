@@ -1,16 +1,13 @@
+import { VotingSession, connectionTracker } from './NetworkHelperClasses.js';
+
 let init = false;
 
 const GET_OTHER_PLAYERS_FROM_NODE = true;
 const SERVER_ID = "Test_Server_ID_2f3567ed-fdf9-4792-900b-997af04c5d71";
 
-const NetworkedObjects = {}
-
 let AmServer = false;
 let SelfPeer;
 let MY_ID = "";
-let connections = [];
-
-
 
 const MESSAGE_TYPES = {
     ConInit: "initialConnect",
@@ -24,58 +21,30 @@ const MESSAGE_TYPES = {
 //     path: "/myapp",
 // });
 
-class VotingSession {
-    constructor(remoteSession= null, id= null) {
-        if (remoteSession === null &&  id === null) {
-            this.start = Date.now() - 5000;
-            this.end = Date.now() + 5000;
-            this.castVote();
-            this.otherVotes = [];
-        }else{
-            this.start = remoteSession.start;
-            this.end = remoteSession.end;
-            this.vote = null;
-            this.otherVotes = [{ vote: remoteSession.vote, id: id }];
-        }
-    }
-
-    castVote(){
-        this.vote = Math.floor(Math.random() * 268435456);
-    }
-
-    /**
-     * 
-     * @param {VotingSession} other 
-     * @param {string} id 
-     */
-    addOtherSession(other, id) {
-        if (this.start > other.start) {
-            this.start = other.start;
-        }
-        if (this.end < other.end) {
-            this.end = other.end;
-        }
-        this.otherVotes.push({ vote: other.vote, id: id })
-
-        if (this.otherVotes.length >= Object.keys(connections).length) {
-            this.otherVote = this.otherVotes.sort((a, b) => b.vote - a.vote);
-            if (this.otherVotes[0].vote < this.vote) {
-                WindowLog(`becoming Server with vote ${this.vote}`);
-                return true;
-            }
-            WindowLog(`${this.otherVotes[0].id} should become server with vote ${this.otherVotes[0].vote}`);
-        }
-        return this.otherVotes[0].id;
-    }
-
-    IsActive() { return Date.now() > this.start && Date.now() < this.end };
+function TestTracker() {
+    let connTrack = new connectionTracker();
+    console.log(connTrack)
+    connTrack.push({ dat: 1 }, "tees12")
+    connTrack.push({ dat: 2 }, "tees1234")
+    connTrack.push({ dat: 3 }, "tees12345")
+    console.log(connTrack)
+    connTrack.setServer("tees12345")
+    console.log(connTrack.getCon("tees12"))
+    console.log(connTrack.getCon("tees1234"))
+    console.log(connTrack.getServer())
+    console.log(Object.keys(connTrack.connectionsById))
+    connTrack.remove("tees1234")
+    console.log(Object.keys(connTrack.connectionsById))
+    connTrack.remove("tees12345")
+    console.log(Object.keys(connTrack.connectionsById))
 }
 
 let currentSession = new VotingSession();
-
+let connTracker = new connectionTracker();
 
 function forceServer() {
 
+    TestTracker();
 }
 
 
@@ -95,14 +64,9 @@ function initConnection() {
 }
 
 function Broadcast(message, excludeList = []) {
-    for (const key in connections) {
-        if (connections.hasOwnProperty.call(connections, key)) {
-            if (!excludeList.includes(key)) {
-                const con = connections[key];
-                con.send(message);
-            }
-
-        }
+    for (const con of connTracker.connectionArr.filter(x => !excludeList.includes(x.PeerId)).map(x => x.PeerJsConnection)) {
+        console.log("cast", con.peer, message)
+        con.send(message);
     }
 }
 
@@ -110,16 +74,16 @@ function SetupConnection(conn, Id) {
     let peerID = "";
     if (Id) {
         peerID = Id;
-        connections[peerID] = conn;
+        connTracker.push(conn, peerID)
     }
-    // console.log(conn);
+
     conn.on("data", (data) => {
         data.from = peerID;
         WindowLog(data);
 
         if (data.type === MESSAGE_TYPES.ConInit) {
             peerID = data.data
-            connections[peerID] = conn;
+            connTracker.push(conn, peerID)
 
             if (AmServer) {
                 Broadcast({ type: MESSAGE_TYPES.ConForwarding, data: [peerID] }, [peerID]);
@@ -127,25 +91,26 @@ function SetupConnection(conn, Id) {
         }
         if (data.type === MESSAGE_TYPES.ConForwarding) {
             for (const OtherId of data.data) {
-                let PeerConnection = SelfPeer.connect(OtherId);
-                SetupConnection(PeerConnection, OtherId)
+                SetupConnection(SelfPeer.connect(OtherId), OtherId)
             }
         }
         if (data.type === MESSAGE_TYPES.ServerArbitrage) {
             if (currentSession?.IsActive()) {
-                let newServerId = currentSession.addOtherSession(data.data, peerID)
+                let newServerId = currentSession.addOtherSession(data.data, peerID, connTracker.numConnection())
                 if (newServerId === true) {
+                    WindowLog(`becoming Server from arb`)
                     if (GET_OTHER_PLAYERS_FROM_NODE) {
                         AmServer = true;
                     } else {
                         SelfPeer = null;
                         start(true)
                     }
-                } else {
-                    connections[newServerId].IsServer = true
-                    console.log(newServerId, connections)
+                } else if (newServerId) {
+                    WindowLog(`${newServerId} should become Server from arb`)
+                    connTracker.setServer(newServerId)
+                    // console.log(newServerId, connTracker.connectionArr)
                 }
-            }else{
+            } else {
                 currentSession = new VotingSession(data.data, peerID);
             }
         }
@@ -154,22 +119,19 @@ function SetupConnection(conn, Id) {
         // send my id to the other end,
         // this is necessary because the server doesn't know the ids of clients that are connecting to it
         conn.send({ type: MESSAGE_TYPES.ConInit, data: MY_ID });
-        if (AmServer && Object.keys(connections).length > 0) {
+        if (AmServer && connTracker.numConnection() > 0) {
             // the server should send a list of all the other clients it has to this client so that all clients are aware of eachother
-            conn.send({ type: MESSAGE_TYPES.ConForwarding, data: Object.keys(connections) });
+            conn.send({ type: MESSAGE_TYPES.ConForwarding, data: Object.keys(connTracker.connectionsById) });
         }
     });
 
     conn.on("close", () => {
         WindowLog(`disconnected: ${Id}`);
         sendPeerIdUpdate({ RemoveId: Id });
-        connections[Id] = null;
-        delete connections[Id];
-        console.log(connections.some(x => x.IsServer), connections)
-        if (!connections.some(x => x.IsServer) && !AmServer) {
+        connTracker.remove(Id)
+        if (!connTracker.getServer() && !AmServer) {
             WindowLog(`need new server`);
-            console.log(connections)
-            if (Object.keys(connections).length == 0) {
+            if (connTracker.connectionArr.length === 0) {
                 // no active connections assume the server role
                 // SelfPeer = null;
                 WindowLog("becoming Server by default")
@@ -182,7 +144,7 @@ function SetupConnection(conn, Id) {
                 // other active connection that need to be negotiated with for server role
                 if (currentSession.IsActive()) {
                     currentSession.castVote()
-                }else{
+                } else {
                     currentSession = new VotingSession();
                 }
                 Broadcast({ type: MESSAGE_TYPES.ServerArbitrage, data: currentSession })
@@ -208,15 +170,13 @@ async function start(AsServer) {
             GetPeersFromNode().then(x => {
                 x.ids.forEach(id => {
                     if (id != MY_ID) {
-                        let peerConn = SelfPeer.connect(id);
-                        SetupConnection(peerConn, id)
+                        SetupConnection(SelfPeer.connect(id), id)
                     }
                 })
             })
         } else {
             if (!AmServer) {
-                let ServerConn = SelfPeer.connect(SERVER_ID);
-                SetupConnection(ServerConn, SERVER_ID)
+                SetupConnection(SelfPeer.connect(SERVER_ID), SERVER_ID)
             }
         }
 
@@ -228,11 +188,11 @@ async function start(AsServer) {
         } else if (err.type == "peer-unavailable") {
             if (GET_OTHER_PLAYERS_FROM_NODE) {
                 let errData = err.message.split("Could not connect to peer ");
-                if (errData[1]){
+                if (errData[1]) {
                     sendPeerIdUpdate({ RemoveId: errData[1] })
+                    connTracker.remove(errData[1])
                 }
             }
-            // ServerConn = null;
         } else {
             console.log(err);
         }
@@ -247,7 +207,7 @@ function uuidv4() {
 }
 
 function sendPeerIdUpdate(body) {
-    if (GET_OTHER_PLAYERS_FROM_NODE){
+    if (GET_OTHER_PLAYERS_FROM_NODE) {
         console.log("sending Peer Update", body)
         fetch("PeerIdUpdate",
             {
