@@ -42,9 +42,20 @@ function TestTracker() {
 let currentSession = new VotingSession();
 let connTracker = new connectionTracker();
 
+function ReadyVotingSession(otherPeerData = null, peerID = null) {
+    if (currentSession.IsActive()) {
+        currentSession.castVote()
+    } else {
+        currentSession = new VotingSession(otherPeerData, peerID);
+    }
+    return currentSession;
+}
+
 function forceServer() {
 
-    TestTracker();
+    // TestTracker();
+    currentSession = new VotingSession(null, null, VotingSession.MAX_VOTE + 1);
+    Broadcast({ type: MESSAGE_TYPES.ServerArbitrage, data: currentSession })
 }
 
 
@@ -60,13 +71,25 @@ function initConnection() {
         return;
     }
     SendData.i++;
-    Broadcast(SendData)
+    if (AmServer) {
+        Broadcast(SendData)
+    } else {
+        SendToServer(SendData)
+    }
 }
 
 function Broadcast(message, excludeList = []) {
-    for (const con of connTracker.connectionArr.filter(x => !excludeList.includes(x.PeerId)).map(x => x.PeerJsConnection)) {
-        console.log("cast", con.peer, message)
-        con.send(message);
+    for (const CON of connTracker.connectionArr) {
+        if (!excludeList.includes(CON.PeerId)) {
+            console.log("cast", CON.PeerJsConnection.peer, message)
+            CON.PeerJsConnection.send(message);
+        }
+    }
+}
+
+function SendToServer(message) {
+    if (!AmServer) {
+        connTracker.getServer().PeerJsConnection.send(message);
     }
 }
 
@@ -75,6 +98,9 @@ function SetupConnection(conn, Id) {
     if (Id) {
         peerID = Id;
         connTracker.push(conn, peerID)
+        if (peerID === SERVER_ID) {
+            connTracker.setServer(peerID)
+        }
     }
 
     conn.on("data", (data) => {
@@ -82,19 +108,27 @@ function SetupConnection(conn, Id) {
         WindowLog(data);
 
         if (data.type === MESSAGE_TYPES.ConInit) {
-            peerID = data.data
+            peerID = data.myId
             connTracker.push(conn, peerID)
-
-            if (AmServer) {
+            if (data.isServer) {
+                connTracker.setServer(peerID);
+            } else if (AmServer) {
                 Broadcast({ type: MESSAGE_TYPES.ConForwarding, data: [peerID] }, [peerID]);
+            } else if (!AmServer && !connTracker.getServer()) {
+                ReadyVotingSession()
+                Broadcast({ type: MESSAGE_TYPES.ServerArbitrage, data: currentSession })
             }
         }
         if (data.type === MESSAGE_TYPES.ConForwarding) {
             for (const OtherId of data.data) {
-                SetupConnection(SelfPeer.connect(OtherId), OtherId)
+                console.log(`setup connection with ${OtherId} known con ${connTracker.getCon(OtherId)}`)
+                if (!connTracker.getCon(OtherId)) {
+                    SetupConnection(SelfPeer.connect(OtherId), OtherId)
+                }
             }
         }
         if (data.type === MESSAGE_TYPES.ServerArbitrage) {
+            console.log(currentSession, currentSession.IsActive(), data.data)
             if (currentSession?.IsActive()) {
                 let newServerId = currentSession.addOtherSession(data.data, peerID, connTracker.numConnection())
                 if (newServerId === true) {
@@ -107,21 +141,23 @@ function SetupConnection(conn, Id) {
                     }
                 } else if (newServerId) {
                     WindowLog(`${newServerId} should become Server from arb`)
-                    connTracker.setServer(newServerId)
+                    connTracker.setServer(newServerId);
+                    AmServer = false;
                     // console.log(newServerId, connTracker.connectionArr)
                 }
             } else {
-                currentSession = new VotingSession(data.data, peerID);
+                ReadyVotingSession(data.data, peerID)
+                Broadcast({ type: MESSAGE_TYPES.ServerArbitrage, data: currentSession })
             }
         }
     });
     conn.on("open", () => {
         // send my id to the other end,
         // this is necessary because the server doesn't know the ids of clients that are connecting to it
-        conn.send({ type: MESSAGE_TYPES.ConInit, data: MY_ID });
+        conn.send({ type: MESSAGE_TYPES.ConInit, myId: MY_ID, isServer: AmServer });
         if (AmServer && connTracker.numConnection() > 0) {
             // the server should send a list of all the other clients it has to this client so that all clients are aware of eachother
-            conn.send({ type: MESSAGE_TYPES.ConForwarding, data: Object.keys(connTracker.connectionsById) });
+            conn.send({ type: MESSAGE_TYPES.ConForwarding, data: connTracker.allPeerIds() });
         }
     });
 
@@ -131,7 +167,7 @@ function SetupConnection(conn, Id) {
         connTracker.remove(Id)
         if (!connTracker.getServer() && !AmServer) {
             WindowLog(`need new server`);
-            if (connTracker.connectionArr.length === 0) {
+            if (connTracker.numConnection() === 0) {
                 // no active connections assume the server role
                 // SelfPeer = null;
                 WindowLog("becoming Server by default")
@@ -142,17 +178,15 @@ function SetupConnection(conn, Id) {
                 }
             } else {
                 // other active connection that need to be negotiated with for server role
-                if (currentSession.IsActive()) {
-                    currentSession.castVote()
-                } else {
-                    currentSession = new VotingSession();
-                }
+                ReadyVotingSession()
                 Broadcast({ type: MESSAGE_TYPES.ServerArbitrage, data: currentSession })
             }
         }
 
     });
 }
+
+let RemovedInitialPeers = {};
 
 async function start(AsServer) {
     let ConId = AsServer ? SERVER_ID : `PEER_${uuidv4()}`;
@@ -168,17 +202,17 @@ async function start(AsServer) {
 
         if (GET_OTHER_PLAYERS_FROM_NODE) {
             GetPeersFromNode().then(x => {
+                console.log(x);
                 x.ids.forEach(id => {
                     if (id != MY_ID) {
                         SetupConnection(SelfPeer.connect(id), id)
                     }
                 })
             })
-        } else {
-            if (!AmServer) {
-                SetupConnection(SelfPeer.connect(SERVER_ID), SERVER_ID)
-            }
+        } else if (!AmServer) {
+            SetupConnection(SelfPeer.connect(SERVER_ID), SERVER_ID)
         }
+
 
     });
     SelfPeer.on('error', (err) => {
@@ -188,9 +222,16 @@ async function start(AsServer) {
         } else if (err.type == "peer-unavailable") {
             if (GET_OTHER_PLAYERS_FROM_NODE) {
                 let errData = err.message.split("Could not connect to peer ");
-                if (errData[1]) {
-                    sendPeerIdUpdate({ RemoveId: errData[1] })
-                    connTracker.remove(errData[1])
+                let FailedConId = errData[1];
+                if (FailedConId) {
+                    if (!RemovedInitialPeers[FailedConId]) {
+                        RemovedInitialPeers[FailedConId] = 1;
+                    }
+                    RemovedInitialPeers[FailedConId]++;
+                    if (RemovedInitialPeers[FailedConId] <= 2) {
+                        sendPeerIdUpdate({ RemoveId: FailedConId })
+                        connTracker.remove(FailedConId)
+                    }
                 }
             }
         } else {

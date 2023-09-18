@@ -1,7 +1,11 @@
+
+/**
+ * class used to track PeerJs connections 
+ */
 class connectionTracker {
     constructor() {
         this.connectionsById = [];
-        this.connectionArr = [{ isServer: false, PeerId: "", PeerJsConnection: {} }]
+        this.connectionArr = [{ isServer: false, PeerId: "", PeerJsConnection: {} }]// present so that VScode knows what type this will be
         this.connectionArr.pop();
     }
 
@@ -19,6 +23,11 @@ class connectionTracker {
         this.connectionArr = this.connectionArr.filter(x => x.PeerId != id)
     }
 
+    /**
+     * 
+     * @param {string} id 
+     * @returns 
+     */
     getCon(id) {
         return this.connectionsById[id]
     }
@@ -34,16 +43,27 @@ class connectionTracker {
     }
 
     getServer() {
-        let Id = this.connectionArr.filter(x => x.isServer)[0]?.PeerId;
-        return Id ? this.connectionsById[Id] : null;
+        return this.connectionArr.find(x => x.isServer == true)?.PeerJsConnection;
     }
 
+    /**
+     * 
+     * @returns {number} number of connections tracked by this instance
+     */
     numConnection = () => this.connectionArr.length
+
+    /**
+     * 
+     * @returns {string[]} list of string Ids for the connections tracked by this instance
+     */
+    allPeerIds = () => Object.keys(this.connectionsById)
 }
 
 
 class VotingSession {
-    constructor(remoteSession = null, id = null) {
+
+    static MAX_VOTE = 268435456;
+    constructor(remoteSession = null, id = null, _vote = null) {
         if (remoteSession === null && id === null) {
             this.start = Date.now() - 5000;
             this.end = Date.now() + 5000;
@@ -55,10 +75,14 @@ class VotingSession {
             this.vote = null;
             this.otherVotes = [{ vote: remoteSession.vote, id: id }];
         }
+        if (_vote){
+            this.vote = _vote;
+        }
+        console.log(this);
     }
 
     castVote() {
-        this.vote = Math.floor(Math.random() * 268435456);
+        this.vote = Math.floor(Math.random() * VotingSession.MAX_VOTE);
     }
 
     /**
