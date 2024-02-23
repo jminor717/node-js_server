@@ -54,6 +54,14 @@ class connectionTracker {
         return this.connectionArr.find(x => x.isServer == true)?.PeerJsConnection;
     }
 
+    closeAllConnections(){
+        this.connectionArr.forEach(x => {
+            x.PeerJsConnection.close();
+        });
+        this.connectionArr = [];
+        this.connectionsById = [];
+    }
+
     /**
      * 
      * @returns {number} number of connections tracked by this instance

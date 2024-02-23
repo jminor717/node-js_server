@@ -7,7 +7,7 @@ const bodyParser = require('body-parser');
 app.listen(port, '0.0.0.0', function () {
     console.log("Listening on " + port);
 });
-app.use(bodyParser.json());
+app.use(bodyParser.json({ limit: "25000kb" }));
 
 const parse = require('./byteParser.js')
 const WebSocket = require('ws');
@@ -38,7 +38,29 @@ const wss = new WebSocket.Server({
 
 const { PeerServer } = require("peer");
 
-const peerServer = PeerServer({ port: 9000, path: "/myapp" });
+const peerServer = PeerServer({ port: 9000, path: "/" });
+
+peerServer.on('connection', (stream) => {
+    console.log('Ah, we have  user!', stream.id, stream.token);
+});
+
+peerServer.on('error', (err) => {
+    console.log('ERR!\n', err);
+});
+
+// var privateKey = fs.readFileSync('sslcert/server.key', 'utf8');
+// var certificate = fs.readFileSync('sslcert/server.crt', 'utf8');
+
+// const { PeerServer } = require('peer');
+// const peerServer = PeerServer({
+//     port: 443,
+//     path: '/',
+//     ssl: {
+//         key: privateKey,
+//         cert: certificate
+//     }
+
+// });
 
 var scene = null;
 var clients = [], updates = [], clientId = 1;
@@ -239,25 +261,136 @@ app.post("/school" + /^(.+)$/, function (req, res) {
     school.handlepostRequest(req, res)
 });
 
+let ServerTracker = {
+    Servers: {
+        "ServerName": {
+            ServerName: "",
+            Host: "",
+            Players: [""]
+        }
+    },
+    PlayersNotInServer: [""],
+};
+ServerTracker.PlayersNotInServer = [];
+ServerTracker.Servers = {};
+
+let PlayerToServerMap = {};
+
 let IDs = [];
+
+
+/**
+JoinNetwork
+LeaveNetwork
+JoinServer
+LeaveServer
+CreateServer
+
+ */
+function RemoveFromArray(array, item) {
+    const index = array.indexOf(item);
+    if (index > -1) { // only splice array when item is found
+        array.splice(index, 1); // 2nd parameter means remove one item only
+    }
+}
+
+function LeaveServer(knownServer, Id) {
+    if (Object.hasOwnProperty.call(ServerTracker.Servers, knownServer)) {
+        let server = ServerTracker.Servers[knownServer];
+        if (server.Host === Id) {
+            server.Host = ""
+        } else {
+            RemoveFromArray(server.Players, Id)
+        }
+        if (server.Host === "" && server.Players.length === 0) {
+            delete ServerTracker.Servers[knownServer];
+        }
+        return true;
+    }
+    return false;
+}
+
+function ValidPlayer(playerId) {
+    return playerId && playerId.length > 8
+}
+
+function ValidateServer(serverName) {
+    return serverName && serverName.length > 2
+}
+
 app.post("/PeerIdUpdate", function (req, res) {
     /* some server side logic */
-    console.log(req.body);
-    if (req.body.myId && !IDs.includes(req.body.myId)) {
-        IDs.push(req.body.myId)
-    }
-    if (req.body.RemoveId){
-        const index = IDs.indexOf(req.body.RemoveId);
-        if (index > -1) { // only splice array when item is found
-            IDs.splice(index, 1); // 2nd parameter means remove one item only
+    let request = req.body;
+    let response = {};
+
+    if (ValidPlayer(request.MyId ?? request.RemoveId)) {
+        console.log(request);
+        switch (request.Action) {
+            case "JoinNetwork":
+                if (request.MyId && !PlayerToServerMap[request.MyId]) {
+                    //ServerTracker.PlayersNotInServer.push(request.MyId);
+                    //PlayerToServerMap[request.MyId] = "";
+                }
+                break;
+            case "LeaveNetwork":
+                if (request.RemoveId && Object.hasOwnProperty.call(PlayerToServerMap, request.RemoveId)) {
+                    let knownServer = PlayerToServerMap[request.RemoveId];
+                    if (knownServer === "") {
+                        RemoveFromArray(ServerTracker.PlayersNotInServer, request.RemoveId)
+                    } else if (LeaveServer(knownServer, request.RemoveId)) {
+                        // server was found and left
+                    } else {
+                        console.log("No Do Goo", request, ServerTracker); // server not found
+                    }
+                    delete PlayerToServerMap[request.RemoveId];
+                }
+                break;
+            case "JoinServer":
+                if (Object.hasOwnProperty.call(ServerTracker.Servers, request.ServerName)) {
+                    if (PlayerToServerMap[request.MyId] === request.ServerName) {
+                        response.error = "Already in server";
+                    } else {
+                        PlayerToServerMap[request.MyId] = request.ServerName;
+                        ServerTracker.Servers[request.ServerName].Players.push(request.MyId);
+                    }
+                }
+                // else server does not exist
+                break;
+            case "LeaveServer":
+                if (Object.hasOwnProperty.call(PlayerToServerMap, request.MyId)) {
+                    LeaveServer(PlayerToServerMap[request.MyId], request.MyId);
+                    PlayerToServerMap[request.MyId] = undefined;
+                    delete PlayerToServerMap[request.MyId];
+                }
+                break;
+            case "CreateServer":
+                if (!ValidateServer(request.ServerName)) {
+                    response.error = "Server name invalid"
+                }else if (!Object.hasOwnProperty.call(ServerTracker.Servers, request.ServerName)) {
+                    ServerTracker.Servers[request.ServerName] = {
+                        ServerName: request.ServerName,
+                        Host: request.MyId,
+                        Players: [],
+                    }
+                    PlayerToServerMap[request.MyId] = request.ServerName;
+                }
+                break;
+            default:
+                console.log("unknown Action")
+                break;
         }
+        console.log(PlayerToServerMap);//, ServerTracker
+    } else {
+        console.error("Bad Player", request);
+        response.error = "Player Id Not Created"
     }
-    res.send({ ids: IDs });
+
+    res.send({ Servers: ServerTracker.Servers, Response: response });
 });
 
 app.get("/PeerIds", function (req, res) {
     /* some server side logic */
-    res.send({ ids: IDs });
+    res.send(ServerTracker);
 });
 
 /* serves all the static files */

@@ -2,7 +2,7 @@
 <html lang="en">
 
 <head>
-    <title>three.js - pointerlock controls</title>
+    <title>Peerjs Network Tester</title>
     <meta charset="utf-8">
     <style>
 
@@ -31,8 +31,14 @@
     <div id="defalut"></div>
 
     <button onclick="initConnection()">init Connection</button>
-
-    <button onclick="forceServer()">ForceServer</button>
+    <button onclick="forceServer()">Force Host</button>
+    <br/><br />
+    <input name="ServerName" type="text" maxlength="128" id="ServerName"  />
+    <br/>
+    <button onclick="createServer()">Create Server</button>
+    <button onclick="joinServer()">Join Server</button>
+    <button onclick="leaveServer()">Leave Server</button>
+    <br /><br />
     <div id="Console__"></div>
 </body>
 

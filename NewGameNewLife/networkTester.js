@@ -36,10 +36,58 @@ class PeerJsNetwork {
 
     }
 
+    JoinNetwork() {
+        this._sendPeerIdUpdate({ Action: "JoinNetwork", MyId: this.MY_ID })
+    }
+
+    LeaveNetwork() {
+        this._sendPeerIdUpdate({ Action: "LeaveNetwork", RemoveId: this.MY_ID })
+    }
+
+    NotifyPlayerLeftNetwork(playerId) {
+        this._sendPeerIdUpdate({ Action: "LeaveNetwork", RemoveId: playerId })
+    }
+
+    JoinServer(serverName) {
+        this._sendPeerIdUpdate({ Action: "JoinServer", MyId: this.MY_ID, ServerName: serverName }).then(data => {
+            if (!data.Response.error) {
+                data.Servers
+                this.ExpectedInitialPeers = data.Servers[serverName].Players.concat([data.Servers[serverName].Host]).filter((x) => x.length > 3);
+                console.log("attempting contact with", this.ExpectedInitialPeers);
+                if (!this.ExpectedInitialPeers.includes(this.MY_ID)) {
+                    console.log("Was not added to the server");
+                    return;
+                }
+                this.ExpectedInitialPeers.forEach(id => {
+                    if (id != this.MY_ID && id.length > 3) {
+                        // let peer = this.SelfPeer.connect(id);
+                        // setTimeout(() => {
+                        //     this._setupConnection(peer, id)
+                        // }, 1000);
+                        this._setupConnection(this.SelfPeer.connect(id), id)
+                    }
+                })
+            }
+        })
+    }
+
+    LeaveServer() {
+        this._sendPeerIdUpdate({ Action: "LeaveServer", MyId: this.MY_ID }).then(x => {
+            this.connTracker.closeAllConnections();
+        })
+    }
+
+    CreateServer(serverName) {
+        this._sendPeerIdUpdate({ Action: "CreateServer", MyId: this.MY_ID, ServerName: serverName }).then(x => {
+            this.AmServer = true;
+            this.connTracker.setServer("");
+        })
+    }
+
     Broadcast(message, excludeList = []) {
         for (const CON of this.connTracker.connectionArr) {
             if (!excludeList.includes(CON.PeerId)) {
-                // console.log("cast", CON.PeerJsConnection.peer, message)
+                console.log("cast", CON.PeerJsConnection, message)
                 CON.PeerJsConnection.send(message);
             }
         }
@@ -54,24 +102,57 @@ class PeerJsNetwork {
     start(AsServer) {
         let ConId = AsServer ? PeerJsNetwork.SERVER_ID : `PEER_${uuid_v4()}`;
         console.log(`start ${ConId}`)
-        this.SelfPeer = new Peer(ConId);
+
+        // { url: 'stun:stun.l.google.com:19302' },
+        // { url: 'turn:homeo@turn.bistri.com:80', credential: 'homeo' }
+        const iceConfiguration = {
+            iceServers: [
+                {
+                    urls: 'turn:openrelay.metered.ca:80',
+                    username: 'openrelayproject',
+                    credentials: 'openrelayproject'
+                }
+            ],
+        }
+        const cfg = {
+            'iceServers': [
+                { url: 'stun:stun.l.google.com:19302' },
+                //{ url: 'turn:turn.bistri.com:80', username: "homeo", credential: 'homeo' }
+            ]
+        }
+
+        // this.SelfPeer = new Peer(ConId);
+        // this.SelfPeer = new Peer(ConId, {
+        //     //config: cfg
+        //     debug: 2
+        // });
+
+        this.SelfPeer = new Peer({
+            host: '/',
+            secure: false,
+            port: 9000,
+            path: '/'
+        })
 
         this.SelfPeer.on('open', (id) => {
             this.AmServer = AsServer;
             this.MY_ID = id;
 
-            // WindowLog('My peer ID is: ' + id);
-            this._sendPeerIdUpdate({ myId: this.MY_ID });
+            WindowLog('My peer ID is: ' + id);
+            this.JoinNetwork();
 
             if (this.GET_OTHER_PLAYERS_FROM_NODE) {
                 this._getPeersFromNode().then(x => {
-                    console.log(x);
-                    this.ExpectedInitialPeers = x.ids;
-                    x.ids.forEach(id => {
-                        if (id != this.MY_ID) {
-                            this._setupConnection(this.SelfPeer.connect(id), id)
-                        }
-                    })
+                    console.log("from node ", x);
+                    // this.ExpectedInitialPeers = x.ids;
+                    // x.ids.forEach(id => {
+                    //     if (id != this.MY_ID) {
+                    //         setTimeout(() => {
+                    //             this._setupConnection(this.SelfPeer.connect(id), id)
+                    //         }, 100);
+                    //         // this._setupConnection(this.SelfPeer.connect(id), id)
+                    //     }
+                    // })
                 })
             } else if (!this.AmServer) {
                 this._setupConnection(this.SelfPeer.connect(PeerJsNetwork.SERVER_ID), PeerJsNetwork.SERVER_ID)
@@ -93,19 +174,26 @@ class PeerJsNetwork {
                         }
                         this.RemovedInitialPeers[FailedConId]++;
                         if (this.RemovedInitialPeers[FailedConId] <= 2) {
-                            this._sendPeerIdUpdate({ RemoveId: FailedConId })
+                            this.NotifyPlayerLeftNetwork(FailedConId);
                             this.connTracker.remove(FailedConId)
                         }
                     }
                 }
             } else {
-                console.log(err);
+                console.error(err);
             }
         });
-        this.SelfPeer.on("connection", (conn) => this._setupConnection(conn));
+        this.SelfPeer.on("connection", (conn) => {
+            console.log("connection incoming", conn);
+            // setTimeout(() => {
+            //     this._setupConnection(conn, conn.peer);
+            // }, 100);
+            this._setupConnection(conn) 
+        });
     }
 
     _setupConnection(conn, Id) {
+        console.log("setup Connection ", conn, Id)
         let peerID = "";
         if (Id) {
             peerID = Id;
@@ -117,7 +205,8 @@ class PeerJsNetwork {
 
         conn.on("data", (data) => {
             data.from = peerID;
-            // console.log("is server", this.AmServer ,data);
+            console.log("is server", this.AmServer, data);
+            WindowLog(data)
             if (data.type === PeerJsNetwork.MESSAGE_TYPES.ConInit) {
                 peerID = data.myId
                 this.connTracker.push(conn, peerID)
@@ -144,12 +233,15 @@ class PeerJsNetwork {
                 for (const OtherId of data.data) {
                     // console.log(`setup connection with ${OtherId} known con ${this.connTracker.getCon(OtherId)}`)
                     if (!this.connTracker.getCon(OtherId)) {
-                        this._setupConnection(this.SelfPeer.connect(OtherId), OtherId)
+                        setTimeout(() => {
+                            this._setupConnection(this.SelfPeer.connect(OtherId), OtherId)
+                        }, 100);
+                        // this._setupConnection(this.SelfPeer.connect(OtherId), OtherId)
                     }
                 }
             }
             if (data.type === PeerJsNetwork.MESSAGE_TYPES.ServerArbitrage) {
-                // console.log("Network Vote", currentSession?.IsActive())
+                console.log("Network Vote", currentSession?.IsActive())
                 if (this.currentSession?.IsActive()) {
                     this.currentSession.addOtherSession(data.data, peerID);
                 } else {
@@ -160,6 +252,7 @@ class PeerJsNetwork {
             }
         });
         conn.on("open", () => {
+            console.log(`Connection Open with ${peerID}`)
             // send my id to the other end,
             // this is necessary because the server doesn't know the ids of clients that are connecting to it
             conn.send({ type: PeerJsNetwork.MESSAGE_TYPES.ConInit, myId: this.MY_ID, isServer: this.AmServer });
@@ -171,7 +264,7 @@ class PeerJsNetwork {
 
         conn.on("close", () => {
             console.log(`disconnected: ${peerID}`);
-            this._sendPeerIdUpdate({ RemoveId: peerID });
+            this.NotifyPlayerLeftNetwork(peerID);
             this.connTracker.remove(peerID)
             if (!this.connTracker.getServer() && !this.AmServer) {
                 if (this.connTracker.numConnection() === 0) {
@@ -191,7 +284,9 @@ class PeerJsNetwork {
                     }
                 }
             }
-
+        });
+        conn.on('error', (err) => {
+            console.log("connection setup failed ", err)
         });
     }
 
@@ -215,7 +310,7 @@ class PeerJsNetwork {
             if (this.GET_OTHER_PLAYERS_FROM_NODE) {
                 this.AmServer = true;
                 this.connTracker.setServer("");
-                // WindowLog(this.AmServer)
+                WindowLog(this.AmServer)
             } else {
                 this.start(true)
             }
@@ -229,16 +324,16 @@ class PeerJsNetwork {
 
 
     _sendPeerIdUpdate(body) {
-        if (this.GET_OTHER_PLAYERS_FROM_NODE) {
-            fetch("PeerIdUpdate",
-                {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(body),
-                })
-            // .then(function (res) { return res.json(); })
-            // .then(function (data) { console.log(JSON.stringify(data)) })
-        }
+        //if (this.GET_OTHER_PLAYERS_FROM_NODE) {
+        return fetch("PeerIdUpdate",
+            {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(body),
+            })
+            .then(function (res) { return res.json(); });
+        //.then(function (data) { console.log(data) })
+        // }
 
     }
 
@@ -253,22 +348,6 @@ class PeerJsNetwork {
             .then(function (res) { return res.json(); })
     }
 }
-
-
-
-
-
-
-// const peer = new Peer("someid", {
-//     host: "localhost",
-//     port: 9000,
-//     path: "/myapp",
-// });
-
-
-
-
-
 
 
 
@@ -294,12 +373,25 @@ window.initConnection = () => {
     if (net.AmServer) {
         net.Broadcast(SendData)
     } else {
-        net.SendToServer(SendData)
+        net.Broadcast(SendData)
+        // net.SendToServer(SendData)
     }
 }
 window.forceServer = () => {
     net.currentSession = new VotingSession(null, null, VotingSession.MAX_VOTE + 1);
     net.Broadcast({ type: PeerJsNetwork.MESSAGE_TYPES.ServerArbitrage, data: net.currentSession })
+}
+
+const ServerNameInput = document.getElementById("ServerName");
+
+window.createServer = () => {
+    net.CreateServer(ServerNameInput.value)
+}
+window.joinServer = () => {
+    net.JoinServer(ServerNameInput.value)
+}
+window.leaveServer = () => {
+    net.LeaveServer();
 }
 
 
