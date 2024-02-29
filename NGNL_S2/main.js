@@ -14,3 +14,5 @@ import { RapierPhysics } from './RapierPhysics.js';
 
 
 console.log("ruyeib")
+
+// airbag, projectile that expands (pushing other objects away, then shrinks back down and and re-expands multiple times as it moves)
