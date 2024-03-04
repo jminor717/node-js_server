@@ -1,5 +1,8 @@
 import { Clock, Vector3, Quaternion, Matrix4 } from 'three';
 
+import RAPIER from 'https://cdn.skypack.dev/@dimforge/rapier3d-compat';
+// let RAPIER = null;
+
 const RAPIER_PATH = 'https://cdn.skypack.dev/@dimforge/rapier3d-compat@0.11.2';
 
 const frameRate = 60;
@@ -7,7 +10,6 @@ const frameRate = 60;
 const _scale = new Vector3(1, 1, 1);
 const ZERO = new Vector3();
 
-let RAPIER = null;
 
 let TrackedObjects = {};
 
@@ -27,18 +29,27 @@ function getCollider(geometry) {
 
 		collider = RAPIER.ColliderDesc.ball(radius);
 	}
-
-	collider.setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS);
+	//RAPIER.ActiveEvents.COLLISION_EVENTS         RAPIER.ActiveEvents.CONTACT_FORCE_EVENTS
+	collider?.setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS);//| RAPIER.ActiveEvents.CONTACT_FORCE_EVENTS
+	console.log(RAPIER.ActiveEvents, RAPIER.ActiveHooks, collider)
 	return collider;
 }
 
 async function RapierPhysics(gravity) {
-	if (RAPIER === null) {
-		RAPIER = await import(RAPIER_PATH);
-		await RAPIER.init();
-	}
+	// const myPromise = new Promise((resolve, reject) => {
+	// 	import('@dimforge/rapier3d').then(async _RAPIER => {
+	// 		RAPIER = _RAPIER;
+	// 		await RAPIER.init();
+	// 		resolve("foo");
+	// 	});
+	// 	setTimeout(() => {
+	// 		reject("import timed out");
+	// 	}, 10000);
+	// });
+	// await myPromise;
 	// Docs: https://rapier.rs/docs/api/javascript/JavaScript3D/	
 
+	await RAPIER.init();
 	//	const gravity = new Vector3( 0.0, - 0.01, 0.0 );
 	const world = new RAPIER.World(gravity);
 
@@ -51,7 +62,7 @@ async function RapierPhysics(gravity) {
 	function addScene(scene) {
 		scene.traverse(function (child) {
 			if (child.isMesh) {
-				const physics = child.userData.physics;
+				const physics = child.userData;
 				if (physics) {
 					addMesh(child, physics.mass, physics.restitution);
 				}
@@ -63,7 +74,7 @@ async function RapierPhysics(gravity) {
 		const shape = getCollider(mesh.geometry);
 		if (shape === null) return;
 
-		shape.setMass(mass);
+		shape.setDensity(mass);
 		shape.setRestitution(restitution);
 		const body = mesh.isInstancedMesh
 			? createInstancedBody(mesh, mass, shape)
@@ -116,6 +127,21 @@ async function RapierPhysics(gravity) {
 		body.setLinvel(velocity);
 	}
 
+	function applyImpulse(mesh, velocity){
+		let body = meshMap.get(mesh);
+		if (mesh.isInstancedMesh) {
+			body = body[index];
+		}
+		body.applyImpulse(velocity, true);
+	}
+
+	function getPhysicsBody(mesh){
+		let body = meshMap.get(mesh);
+		if (mesh.isInstancedMesh) {
+			body = body[index];
+		}
+		return body;
+	}
 	const clock = new Clock();
 
 	function step() {
@@ -127,7 +153,17 @@ async function RapierPhysics(gravity) {
 
 		eventQueue.drainCollisionEvents((handle1, handle2, started) => {
 			/* Handle the collision event. */
-			console.log(started, TrackedObjects[handle1], TrackedObjects[handle2]);
+			try {
+				let IsWall = TrackedObjects[handle1].Mesh.userData?.isWall || TrackedObjects[handle2].Mesh.userData?.isWall;
+				if (IsWall) {
+					console.log(started, "with wall");
+				} else {
+					console.log(started, TrackedObjects[handle1].Mesh.userData, TrackedObjects[handle2].Mesh.userData, TrackedObjects[handle1], TrackedObjects[handle2]);
+				}
+			} catch (error) {
+				console.error(error);
+			}
+
 		});
 
 		eventQueue.drainContactForceEvents(event => {
@@ -148,10 +184,8 @@ async function RapierPhysics(gravity) {
 
 					const position = body.translation();
 					_quaternion.copy(body.rotation());
-
 					_matrix.compose(position, _quaternion, _scale).toArray(array, j * 16);
 				}
-
 				mesh.instanceMatrix.needsUpdate = true;
 				mesh.computeBoundingSphere();
 			} else {
@@ -171,7 +205,9 @@ async function RapierPhysics(gravity) {
 		addScene: addScene,
 		addMesh: addMesh,
 		setMeshPosition: setMeshPosition,
-		setMeshVelocity: setMeshVelocity
+		setMeshVelocity: setMeshVelocity,
+		applyImpulse: applyImpulse,
+		getPhysicsBody: getPhysicsBody
 	};
 
 }
