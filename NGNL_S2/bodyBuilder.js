@@ -1,17 +1,21 @@
-const color = new THREE.Color();
-function createColoredWall(offset, rotation) {
-    const vertex = new THREE.Vector3();
 
-    let floorGeometry = new THREE.PlaneGeometry(20, 20, 60, 60);
+"use strict";
+import * as THREE from 'three';
+
+function createColoredWall(scale, offset, rotation, scene) {
+    const vertex = new THREE.Vector3();
+    const color = new THREE.Color();
+
+    let floorGeometry = new THREE.PlaneGeometry(scale, scale, 60, 60);
     floorGeometry.rotateX(- Math.PI / 2);
 
     // vertex displacement
     let position = floorGeometry.attributes.position;
     for (let i = 0, l = position.count; i < l; i++) {
         vertex.fromBufferAttribute(position, i);
-        vertex.x += Math.random() * 0.2 - 0.1;
-        vertex.y += Math.random() * 0.02;
-        vertex.z += Math.random() * 0.2 - 0.1;
+        vertex.x += Math.random() * (scale / 100) - (scale / 200);
+        vertex.y += Math.random() * (scale / 1000);
+        vertex.z += Math.random() * (scale / 100) - (scale / 200);
         position.setXYZ(i, vertex.x, vertex.y, vertex.z);
     }
 
@@ -43,7 +47,7 @@ function createColoredWall(offset, rotation) {
     // AimAbleObjects.push(floor);
 }
 
-function CreateWall(boxSize, offset) {
+function CreateWall(boxSize, offset, scene, physics) {
     const physicalFloor = new THREE.Mesh(
         new THREE.BoxGeometry(boxSize.x, boxSize.y, boxSize.z),
         new THREE.MeshLambertMaterial({ color: 0x999999, visible: false }) //{ color: 0x8f1111 }
@@ -57,5 +61,7 @@ function CreateWall(boxSize, offset) {
     //physicalFloor.receiveShadow = true;
     physicalFloor.userData = { mass: 0, isWall: true };
     scene.add(physicalFloor);
-    // physics.addMesh(physicalFloor, 0, 0);
+    physics.addMesh(physicalFloor, 0, 0);
 }
+
+export { CreateWall, createColoredWall }

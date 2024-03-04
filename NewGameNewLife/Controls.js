@@ -43,7 +43,7 @@ class PointerLockControls extends EventDispatcher {
 
 			camera.quaternion.setFromEuler(_euler);
 
-			scope.dispatchEvent(_changeEvent);
+			// scope.dispatchEvent(_changeEvent);
 		}
 
 		function onPointerlockChange() {

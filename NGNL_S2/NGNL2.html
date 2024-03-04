@@ -2,7 +2,7 @@
 <html lang="en">
 
 <head>
-	<title>three.js - pointerlock controls</title>
+	<title>js Custom Events</title>
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
 	<link type="text/css" rel="stylesheet" href="../three.js/examples/main.css">
@@ -66,14 +66,15 @@
 		{
 			"imports": {
 				"three": "../three.js/build/three.module.js",
-				"three/addons/": "../three.js/examples/jsm/"
+				"three/addons/": "../three.js/examples/jsm/",
+				"three/nodes": "../three.js/examples/jsm/nodes/Nodes.js"
 			}
 		}
 	</script>
 
 		<!-- 					"components/": "./NewGameNewLife/"
 					"components/new/": "./NGNL_S2/" -->
-
+	<script src="/node_modules/peerjs/dist/peerjs.min.js" type="application/javascript"></script>
 	<script type="module" src="NGNL_S2/main.js"> </script>
 </body>
 

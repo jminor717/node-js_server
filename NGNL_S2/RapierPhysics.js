@@ -11,7 +11,7 @@ const _scale = new Vector3(1, 1, 1);
 const ZERO = new Vector3();
 
 
-let TrackedObjects = {};
+//let TrackedObjects = {};
 
 function getCollider(geometry) {
 	const parameters = geometry.parameters;
@@ -55,6 +55,7 @@ async function RapierPhysics(gravity) {
 
 	const meshes = [];
 	const meshMap = new WeakMap();
+	const TrackedObjects = new Map();
 	const _vector = new Vector3();
 	const _quaternion = new Quaternion();
 	const _matrix = new Matrix4();
@@ -70,40 +71,40 @@ async function RapierPhysics(gravity) {
 		});
 	}
 
-	function addMesh(mesh, mass = 0, restitution = 0) {
+	function addMesh(mesh, density = 0, restitution = 0) {
 		const shape = getCollider(mesh.geometry);
 		if (shape === null) return;
 
-		shape.setDensity(mass);
+		shape.setDensity(density);
 		shape.setRestitution(restitution);
 		const body = mesh.isInstancedMesh
-			? createInstancedBody(mesh, mass, shape)
-			: createBody(mesh, mesh.position, mesh.quaternion, mass, shape);
+			? createInstancedBody(mesh, density, shape)
+			: createBody(mesh, mesh.position, mesh.quaternion, density, shape);
 
-		if (mass > 0) {
+		if (density > 0) {
 			meshes.push(mesh);
 			meshMap.set(mesh, body);
 		}
 	}
 
-	function createInstancedBody(mesh, mass, shape) {
+	function createInstancedBody(mesh, density, shape) {
 		const array = mesh.instanceMatrix.array;
 		const bodies = [];
 
 		for (let i = 0; i < mesh.count; i++) {
 			const position = _vector.fromArray(array, i * 16 + 12);
-			bodies.push(createBody(mesh, position, null, mass, shape));
+			bodies.push(createBody(mesh, position, null, density, shape));
 		}
 		return bodies;
 	}
 
-	function createBody(mesh, position, quaternion, mass, shape) {
-		const desc = mass > 0 ? RAPIER.RigidBodyDesc.dynamic() : RAPIER.RigidBodyDesc.fixed();
+	function createBody(mesh, position, quaternion, density, shape) {
+		const desc = density > 0 ? RAPIER.RigidBodyDesc.dynamic() : RAPIER.RigidBodyDesc.fixed();
 		desc.setTranslation(...position);
 		if (quaternion !== null) desc.setRotation(quaternion);
 
 		const body = world.createRigidBody(desc);
-		TrackedObjects[body.handle] = { Mesh: mesh, Body: body };
+		TrackedObjects.set(body.handle, { Mesh: mesh, Body: body });
 		world.createCollider(shape, body);
 
 		return body;
@@ -154,11 +155,12 @@ async function RapierPhysics(gravity) {
 		eventQueue.drainCollisionEvents((handle1, handle2, started) => {
 			/* Handle the collision event. */
 			try {
-				let IsWall = TrackedObjects[handle1].Mesh.userData?.isWall || TrackedObjects[handle2].Mesh.userData?.isWall;
+				let obj1 = TrackedObjects.get(handle1), obj2 = TrackedObjects.get(handle2);
+				let IsWall = obj1.Mesh.userData?.isWall || obj2.Mesh.userData?.isWall;
 				if (IsWall) {
 					console.log(started, "with wall");
 				} else {
-					console.log(started, TrackedObjects[handle1].Mesh.userData, TrackedObjects[handle2].Mesh.userData, TrackedObjects[handle1], TrackedObjects[handle2]);
+					console.log(started, obj1.Mesh.userData, obj2.Mesh.userData, obj1, obj2);
 				}
 			} catch (error) {
 				console.error(error);
@@ -169,7 +171,7 @@ async function RapierPhysics(gravity) {
 		eventQueue.drainContactForceEvents(event => {
 			let handle1 = event.collider1(); // Handle of the first collider involved in the event.
 			let handle2 = event.collider2(); // Handle of the second collider involved in the event.
-			console.log(event, TrackedObjects[handle1], TrackedObjects[handle2]);
+			console.log(event, TrackedObjects.get(handle1), TrackedObjects.get(handle2));
 			/* Handle the contact force event. */
 		});
 
