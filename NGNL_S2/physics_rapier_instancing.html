@@ -100,9 +100,9 @@
 			if (offset.z)
 				physicalFloor.position.z = offset.z;
 			//physicalFloor.receiveShadow = true;
-			physicalFloor.userData = { mass: 0, isWall: true };
+			physicalFloor.userData = { isWall: true };
 			scene.add(physicalFloor);
-			// physics.addMesh(physicalFloor, 0, 0);
+			physics.addMesh(physicalFloor, 0, 0);
 		}
 
 		function initInput() {
@@ -123,9 +123,8 @@
 				const ball = new THREE.Mesh(new THREE.SphereGeometry(ballRadius, 14, 10), ballMaterial);
 				ball.castShadow = true;
 				ball.receiveShadow = true;
-				// ball.userData = { mass: 0.1 };
 				scene.add(ball);
-				physics.addMesh(ball, 10, 0);
+				physics.addMesh(ball, 10, 1);
 
 				// const ballShape = new Ammo.btSphereShape(ballRadius);
 				pos.copy(raycaster.ray.direction);
@@ -197,13 +196,14 @@
 				color: 0x00ff00
 			});
 			let bulbMesh = new THREE.Mesh(bulbGeometry, bulbMat)
-			bulbMesh.userData = { mass: 0 };
+			bulbMesh.userData = { isWall: true };
 			bulbMesh.position.set(0, 0.5, 0);
 			bulbLight.add(bulbMesh);
 
 			scene.add(bulbLight);
 			scene.add(bulbLightFar);
 			scene.add(bulbMesh);
+			physics.addMesh(bulbMesh, 0, 0);
 
 			// const materialBox = new NODES.MeshBasicNodeMaterial();
 			// const materialBox = new THREE.ShadowMaterial({ color: 0x444444 })
@@ -240,8 +240,8 @@
 			boxes.instanceMatrix.setUsage(THREE.DynamicDrawUsage); // will be updated every frame
 			boxes.castShadow = true;
 			boxes.receiveShadow = true;
-			boxes.userData = { mass: 1 };
 			scene.add(boxes);
+			physics.addMesh(boxes, 1, 1);
 
 			for (let i = 0; i < boxes.count; i++) {
 				matrix.setPosition((Math.random() - 0.5) * 7, (Math.random() - 0.5) * 7, (Math.random() - 0.5) * 7);
@@ -255,8 +255,8 @@
 			spheres.instanceMatrix.setUsage(THREE.DynamicDrawUsage); // will be updated every frame
 			spheres.castShadow = true;
 			spheres.receiveShadow = true;
-			spheres.userData = { mass: 1 };
 			scene.add(spheres);
+			physics.addMesh(spheres, 1, 1);
 
 			for (let i = 0; i < spheres.count; i++) {
 				matrix.setPosition((Math.random() - 0.5) * 7, (Math.random() - 0.5) * 7, (Math.random() - 0.5) * 7);

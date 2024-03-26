@@ -28,10 +28,16 @@ function getCollider(geometry) {
 		const radius = parameters.radius !== undefined ? parameters.radius : 1;
 
 		collider = RAPIER.ColliderDesc.ball(radius);
+	} else if (geometry.type === 'CylinderGeometry') {
+		const radius = Math.abs(parameters.radiusTop !== undefined ? parameters.radiusTop : 1);
+		const halfHeigh = Math.abs(parameters.height !== undefined ? parameters.height / 2 : 0.5);
+		console.log(parameters, radius, halfHeigh)
+		//Cylinder
+		collider = RAPIER.ColliderDesc.cylinder(halfHeigh, radius);
 	}
 	//RAPIER.ActiveEvents.COLLISION_EVENTS         RAPIER.ActiveEvents.CONTACT_FORCE_EVENTS
 	collider?.setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS);//| RAPIER.ActiveEvents.CONTACT_FORCE_EVENTS
-	console.log(RAPIER.ActiveEvents, RAPIER.ActiveHooks, collider)
+	//console.log(RAPIER.ActiveEvents, RAPIER.ActiveHooks, collider)
 	return collider;
 }
 
@@ -72,6 +78,7 @@ async function RapierPhysics(gravity) {
 	}
 
 	function addMesh(mesh, density = 0, restitution = 0) {
+
 		const shape = getCollider(mesh.geometry);
 		if (shape === null) return;
 
@@ -80,6 +87,39 @@ async function RapierPhysics(gravity) {
 		const body = mesh.isInstancedMesh
 			? createInstancedBody(mesh, density, shape)
 			: createBody(mesh, mesh.position, mesh.quaternion, density, shape);
+
+
+		if (mesh.children.length > 0) {
+
+			console.log(mesh);
+
+			mesh.children.forEach(childMesh => {
+				console.log("Z")
+				// childMesh.userData = { IsChild: true, parent: mesh.uuid }
+				const childShape = getCollider(childMesh.geometry);
+				if (childShape === null) return;
+
+				childShape.setDensity(density);
+				childShape.setRestitution(restitution);
+				console.log(mesh.position, childMesh.position)
+				
+				let absolutePosition = new Vector3(mesh.position.x + childMesh.position.x, mesh.position.y + childMesh.position.y, mesh.position.z + childMesh.position.z);
+				const body2 = childMesh.isInstancedMesh
+					? createInstancedBody(childMesh, density, childShape)
+					: createBody(childMesh, absolutePosition, childMesh.quaternion, density, childShape);
+				console.log("X")
+				let params = RAPIER.JointData.fixed(
+					{ x: childMesh.position.x, y: childMesh.position.y, z: childMesh.position.z },
+					{ w: 1.0, x: 0.0, y: 0.0, z: 0.0 },
+					{ x: 0, y: 0, z: 0 },
+					{ w: childMesh.quaternion.w, x: childMesh.quaternion.x, y: childMesh.quaternion.y, z: childMesh.quaternion.z }
+				);
+				let joint = world.createImpulseJoint(params, body, body2, true);
+			});
+
+
+
+		}
 
 		if (density > 0) {
 			meshes.push(mesh);
@@ -128,7 +168,7 @@ async function RapierPhysics(gravity) {
 		body.setLinvel(velocity);
 	}
 
-	function applyImpulse(mesh, velocity){
+	function applyImpulse(mesh, velocity) {
 		let body = meshMap.get(mesh);
 		if (mesh.isInstancedMesh) {
 			body = body[index];
@@ -136,7 +176,7 @@ async function RapierPhysics(gravity) {
 		body.applyImpulse(velocity, true);
 	}
 
-	function getPhysicsBody(mesh){
+	function getPhysicsBody(mesh) {
 		let body = meshMap.get(mesh);
 		if (mesh.isInstancedMesh) {
 			body = body[index];
@@ -160,7 +200,11 @@ async function RapierPhysics(gravity) {
 				if (IsWall) {
 					console.log(started, "with wall");
 				} else {
-					console.log(started, obj1.Mesh.userData, obj2.Mesh.userData, obj1, obj2);
+					if (obj1.Mesh.userData?.IsChild) {
+						console.log(obj1.Mesh.userData.parent, obj2.Mesh.uuid)
+					}
+					console.log(started, handle1, obj1.Mesh.userData, handle2, obj2.Mesh.userData, obj1, obj2);
+					//childMesh.userData = { IsChild
 				}
 			} catch (error) {
 				console.error(error);

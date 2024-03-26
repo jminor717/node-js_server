@@ -59,7 +59,7 @@ function CreateWall(boxSize, offset, scene, physics) {
     if (offset.z)
         physicalFloor.position.z = offset.z;
     //physicalFloor.receiveShadow = true;
-    physicalFloor.userData = { mass: 0, isWall: true };
+    physicalFloor.userData = { isWall: true };
     scene.add(physicalFloor);
     physics.addMesh(physicalFloor, 0, 0);
 }
