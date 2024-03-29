@@ -11,6 +11,7 @@ import * as Nodes from 'three/nodes';
 
 import { PointerLockControls, UserInputState } from '../NewGameNewLife/Controls.js';
 import { RapierPhysics } from './RapierPhysics.js';
+import { PidController } from './pid.js';
 import WebGPURenderer from 'three/addons/renderers/webgpu/WebGPURenderer.js';
 import { CreateWall, createColoredWall } from './bodyBuilder.js'
 import { PeerJsNetwork } from '..//NewGameNewLife/NetworkHelperClasses.js';
@@ -25,6 +26,7 @@ network.WindowLog = (data) => { console.log(data); }
 
 const CameraOffset = new THREE.Vector3(0, 0, 0);
 const myVelocity = new THREE.Vector3();
+const rotationPID = PidController();
 
 
 let craftProperties = {
@@ -52,10 +54,26 @@ let craftProperties = {
 }
 
 // airbag, projectile that expands (pushing other objects away, then shrinks back down and and re-expands multiple times as it moves)
+// collider = world.createCollider;   collider.setRadius
+
+/* 
+
+upgrades:
+    Seeing the code: adds a scanning function that shows all entities as wire frames with enemies highted red
+        when in use you are also highted for all players 
+
+    Tuner: allow PID values for rotational tracking to be tuned manually allowing more control over rotation
+*/
+
 
 async function init() {
     network.start();
     physics = await RapierPhysics(new THREE.Vector3(0.0, 0.0, 0.0));
+    rotationPID.setTarget(0);
+    rotationPID.setGains(0.5, 0, 0.2);
+    rotationPID.setOutput(-10, 10, -10);
+    rotationPID.setItermLimit(-1, 1);
+    rotationPID.setMinError(0);
 
 
     scene = new THREE.Scene();
@@ -79,71 +97,14 @@ async function init() {
 
     camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.01, 1000);
     camera.position.set(craftPos.x, craftPos.y, craftPos.z);
+    
 
 
-    // const craftGeometry = new THREE.IcosahedronGeometry(1, 1);//.toNonIndexed();
-    const craftGeometry = new THREE.SphereGeometry(1);//.toNonIndexed();
-    // const craftMaterial = new THREE.MeshLambertMaterial();
-    const SeeThroughMaterial = new Nodes.MeshBasicNodeMaterial({ side: THREE.FrontSide });
-    const craftMaterial = new Nodes.MeshBasicNodeMaterial({ side: THREE.DoubleSide });
-    craftMaterial.colorNode = Nodes.normalLocal;
+    let ret = createCraft(craftProperties, craftPos, true)
+    craftMesh = ret.mesh;
+    craftView = ret.view;
 
-
-    craftMesh = new THREE.Mesh(craftGeometry, SeeThroughMaterial);
-    craftMesh.position.set(craftPos.x, craftPos.y, craftPos.z);
-    craftMesh.castShadow = true;
-    craftMesh.userData = { IsCraft: true }
-
-
-    craftView = new THREE.Mesh(craftGeometry, SeeThroughMaterial);
-    craftView.castShadow = true;
-
-    // craftView.setRotationFromQuaternion()
-
-    craftProperties.gunPositions.forEach(gun => {
-        const cylinderGeometry = new THREE.CylinderGeometry(0.25, 0.25, gun.z, 12);
-        // new THREE.BoxGeometry(0.5, 0.5, 0.5);
-        // const meshMaterial = new THREE.MeshPhongMaterial({ color: 0x156289, emissive: 0x072534, side: THREE.DoubleSide, flatShading: true });
-        const cylinder = new THREE.Mesh(cylinderGeometry, craftMaterial);
-        cylinder.position.set(gun.x, gun.y, gun.z / 2);
-        cylinder.rotateX(Math.PI / 2);
-        cylinder.castShadow = true;
-        cylinder.receiveShadow = true;
-        cylinder.userData = { IsCraft: true, parent: craftMesh.uuid }
-
-        craftMesh.add(cylinder);
-        craftView.add(cylinder.clone());
-    })
-
-    const sightGeometry = new THREE.RingGeometry(0.1, 0.105, 16);
-    const sightGeometry2 = new THREE.RingGeometry(0.066, 0.071, 16);
-    const sightGeometry3 = new THREE.RingGeometry(0.033, 0.038, 16);
-    const sightGeometry4 = new THREE.SphereGeometry(0.005);
-    const sightMaterial = new THREE.MeshBasicMaterial({ color: 0x3D413D, side: THREE.DoubleSide });
-    const sightMesh = new THREE.Mesh(sightGeometry, sightMaterial);
-    const sightMesh2 = new THREE.Mesh(sightGeometry2, sightMaterial);
-    const sightMesh3 = new THREE.Mesh(sightGeometry3, sightMaterial);
-    const sightMesh4 = new THREE.Mesh(sightGeometry4, sightMaterial); 
-    sightMesh.position.z = -1;
-    sightMesh.add(sightMesh2)
-    sightMesh.add(sightMesh3)
-    sightMesh.add(sightMesh4)
-    craftView.add(sightMesh)
-
-    //physics.addMesh(craftMesh, 1);
-    // craft = Object.assign(craft, craftProperties);
-    // craft.add(craftMesh);
-    craftMesh.visible = false;
-    // craft.add(craftView);
-    scene.add(craftView);
-
-    // craftView.position.set(CameraOffset.x, CameraOffset.y, CameraOffset.z);
-    // craftView.position.set(0,0,0);
-
-    physics.addMesh(craftMesh, 1, 0.3);
     scene.add(camera);
-    // scene.add(craftMesh);
-
 
     controls = new PointerLockControls(camera, document.body);
     const blocker = document.getElementById('blocker');
@@ -209,13 +170,63 @@ async function init() {
 
     stats = new Stats();
     document.body.appendChild(stats.dom);
+}
 
-    let physicsCraft = physics.getPhysicsBody(craftMesh)
-    physicsCraft.setAngvel(new THREE.Vector3());
-    // physicsCraft.setAngvel(data.myCraft.rot);
-    physicsCraft.setLinvel(new THREE.Vector3());
+function createCraft(CraftProperties, position, IsSelf){
+    // const craftGeometry = new THREE.IcosahedronGeometry(1, 1);//.toNonIndexed();
+    const craftGeometry = new THREE.SphereGeometry(1);//.toNonIndexed();
+    // const craftMaterial = new THREE.MeshLambertMaterial();
+    const material = new THREE.MeshPhongMaterial({ color: 0xff0000, flatShading: true });
+    const SeeThroughMaterial = new Nodes.MeshBasicNodeMaterial({ side: THREE.FrontSide });
+    const craftMaterial = new Nodes.MeshBasicNodeMaterial({ side: THREE.DoubleSide });
+    craftMaterial.colorNode = Nodes.normalLocal;
 
-    animate();
+
+    let _craftMesh = new THREE.Mesh(craftGeometry, material);
+    _craftMesh.position.set(position.x, position.y, position.z);
+    _craftMesh.userData = { IsCraft: true }
+    _craftMesh.visible = false;
+
+
+    let _craftView = new THREE.Mesh(craftGeometry, IsSelf ? SeeThroughMaterial : craftMaterial);
+    _craftView.castShadow = true;
+
+    // craftView.setRotationFromQuaternion()
+
+    CraftProperties.gunPositions.forEach(gun => {
+        const cylinderGeometry = new THREE.CylinderGeometry(0.25, 0.25, gun.z, 12);
+        // new THREE.BoxGeometry(0.5, 0.5, 0.5);
+        // const meshMaterial = new THREE.MeshPhongMaterial({ color: 0x156289, emissive: 0x072534, side: THREE.DoubleSide, flatShading: true });
+        const cylinder = new THREE.Mesh(cylinderGeometry, craftMaterial);
+        cylinder.position.set(gun.x, gun.y, gun.z / 2);
+        cylinder.rotateX(Math.PI / 2);
+        cylinder.castShadow = true;
+        cylinder.receiveShadow = true;
+        cylinder.userData = { IsCraft: true, parent: _craftMesh.uuid }
+
+        _craftMesh.add(cylinder);
+        _craftView.add(cylinder.clone());
+    })
+
+    const sightGeometry = new THREE.RingGeometry(0.1, 0.105, 16);
+    const sightGeometry2 = new THREE.RingGeometry(0.066, 0.071, 16);
+    const sightGeometry3 = new THREE.RingGeometry(0.033, 0.038, 16);
+    const sightGeometry4 = new THREE.SphereGeometry(0.005);
+    const sightMaterial = new THREE.MeshBasicMaterial({ color: 0x3D413D, side: THREE.DoubleSide });
+    const sightMesh = new THREE.Mesh(sightGeometry, sightMaterial);
+    const sightMesh2 = new THREE.Mesh(sightGeometry2, sightMaterial);
+    const sightMesh3 = new THREE.Mesh(sightGeometry3, sightMaterial);
+    const sightMesh4 = new THREE.Mesh(sightGeometry4, sightMaterial);
+    sightMesh.position.z = -1;
+    sightMesh.add(sightMesh2)
+    sightMesh.add(sightMesh3)
+    sightMesh.add(sightMesh4)
+    _craftView.add(sightMesh)
+
+    physics.addMesh(_craftMesh, 1, 0.3);
+    scene.add(_craftView);
+
+    return { mesh: _craftMesh, view: _craftView }
 }
 
 function bullet() {
@@ -325,7 +336,8 @@ function animate() {
     stats.update();
 
     let tmpmove = new THREE.Vector3(0, 0, 0);
-
+    let userRotation = 0; 
+    let controlAuthority = 0.2;
     if (controls.isLocked === true) {
         if (UserInputs.moveForward) tmpmove.z -= 1;
         if (UserInputs.moveBackward) tmpmove.z += 1;
@@ -335,43 +347,54 @@ function animate() {
 
         if (UserInputs.moveUp) tmpmove.y += 0.5;
         if (UserInputs.moveDown) tmpmove.y -= 0.5;
+
+        if (UserInputs.rollLeft) userRotation = 0.4;
+        if (UserInputs.rollRight) userRotation = -0.4;
         // if (UserInputs.activeDecelerate) {
         //     if (Math.abs(myVelocity.x) > 1) if (myVelocity.x < 0) tmpmove.x += .5; else tmpmove.x += -.5;
         //     if (Math.abs(myVelocity.y) > 1) if (myVelocity.y < 0) tmpmove.y += .5; else tmpmove.y += -.5;
         //     if (Math.abs(myVelocity.z) > 1) if (myVelocity.z < 0) tmpmove.z += 1; else tmpmove.z += -1;
         // }
-
     }
+    userRotation *= controlAuthority;
+    camera.rotateOnAxis(new THREE.Vector3(0, 0, 1), userRotation)
 
     tmpmove.applyQuaternion(craftView.quaternion);
-    tmpmove.multiplyScalar(0.2);
+    tmpmove.multiplyScalar(controlAuthority);
 
     let physicsCraft = physics.getPhysicsBody(craftMesh)
     physicsCraft.applyImpulse(tmpmove, true)
 
-
-    let mousePointing = new THREE.Vector3(0, 0, -1);
-    let mousePointing90 = new THREE.Vector3(1, 0, 0);
-    let craftPointing = new THREE.Vector3(0, 0, -1);
-    let craftPointing90 = new THREE.Vector3(1, 0, 0);
+    let mousePointing = new THREE.Vector3(0, 0, -(controlAuthority * 5));
+    let craftPointing = new THREE.Vector3(0, 0, -(controlAuthority * 5));
     craftPointing.applyQuaternion(camera.quaternion)
-    craftPointing90.applyQuaternion(camera.quaternion)
     mousePointing.applyQuaternion(physicsCraft.rotation())
-    mousePointing90.applyQuaternion(physicsCraft.rotation())
 
+    let error = craftPointing.clone().sub(mousePointing)
+    let correction = rotationPID.run(error.length());
     // apply 2 impulses on opposite sides of the craft in opposite directions so that there is only torque and no net force
-    physicsCraft.applyImpulseAtPoint(craftPointing.clone().sub(mousePointing), craftPointing, true)
-    physicsCraft.applyImpulseAtPoint(craftPointing.clone().sub(mousePointing).negate(), craftPointing.clone().negate(), true)
+    physicsCraft.applyImpulseAtPoint(error.clone().normalize().multiplyScalar(correction), craftPointing, true)
+    physicsCraft.applyImpulseAtPoint(error.clone().normalize().negate().multiplyScalar(correction), craftPointing.clone().negate(), true)
 
+
+    let mousePointing90 = new THREE.Vector3((controlAuthority * 5), 0, 0);
+    let craftPointing90 = new THREE.Vector3((controlAuthority * 5), 0, 0);
+    craftPointing90.applyQuaternion(camera.quaternion)
+    mousePointing90.applyQuaternion(physicsCraft.rotation())
     physicsCraft.applyImpulseAtPoint(craftPointing90.clone().sub(mousePointing90), craftPointing90, true)
     physicsCraft.applyImpulseAtPoint(craftPointing90.clone().sub(mousePointing90).negate(), craftPointing90.clone().negate(), true)
 
-    if (UserInputs.AnyActiveDirectionalInputs() != true) {
-        physicsCraft.setLinearDamping(1);
-        physicsCraft.setAngularDamping(10);
+
+    let craftVel = physicsCraft.linvel()
+    myVelocity.set(craftVel.x, craftVel.y, craftVel.z)
+
+    if (UserInputs.activeDecelerate || (myVelocity.length() < 1 && UserInputs.AnyActiveDirectionalInputs() != true)) {
+        // if decelerate is active or speed is low while no inputs are active
+        physicsCraft.setLinearDamping(2);
+        physicsCraft.setAngularDamping(0);
     } else {
         physicsCraft.setLinearDamping(0);
-        physicsCraft.setAngularDamping(10);
+        physicsCraft.setAngularDamping(0);
     }
 
     // console.log(craft.children[0].position)
@@ -379,10 +402,8 @@ function animate() {
     craftView.position.set(craftMesh.position.x, craftMesh.position.y, craftMesh.position.z);
     craftView.setRotationFromQuaternion(physicsCraft.rotation())
 
-    let craftVel = physicsCraft.linvel()
-    myVelocity.set(craftVel.x, craftVel.y, craftVel.z)
-
-    if (network.connTracker.numConnection() > 0) {
+    // if (network.connTracker.numConnection() > 0) {
+    if (Object.keys(Peers).length > 0) {
         let dat = { x: camera.quaternion.x, y: camera.quaternion.y, z: camera.quaternion.z, w: camera.quaternion.w };
         network.Broadcast({
             myCraft: {

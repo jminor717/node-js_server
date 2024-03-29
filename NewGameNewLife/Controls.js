@@ -151,8 +151,8 @@ class UserInputState {
 			//     if (canJump === true) velocity.y += 350;
 			//     canJump = false;
 			//     break;
-			case 32: single(1, 0.05, 300, 500);
-			case 71: explosion(controls.getObject().position, 1000, 900, 8);
+			case 32: /*space*/ single(1, 0.05, 300, 500); 
+			case 71: /*g*/ explosion(controls.getObject().position, 1000, 900, 8);
 			default:
 				break;
 		}

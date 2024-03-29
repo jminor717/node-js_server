@@ -78,47 +78,29 @@ async function RapierPhysics(gravity) {
 	}
 
 	function addMesh(mesh, density = 0, restitution = 0) {
-
-		const shape = getCollider(mesh.geometry);
-		if (shape === null) return;
-
-		shape.setDensity(density);
-		shape.setRestitution(restitution);
-		const body = mesh.isInstancedMesh
-			? createInstancedBody(mesh, density, shape)
-			: createBody(mesh, mesh.position, mesh.quaternion, density, shape);
-
+		const body = AddBody(mesh, density, restitution);
+		if (body === null) return;
 
 		if (mesh.children.length > 0) {
-
 			console.log(mesh);
-
+			body._children = []
 			mesh.children.forEach(childMesh => {
 				console.log("Z")
-				// childMesh.userData = { IsChild: true, parent: mesh.uuid }
-				const childShape = getCollider(childMesh.geometry);
-				if (childShape === null) return;
 
-				childShape.setDensity(density);
-				childShape.setRestitution(restitution);
-				console.log(mesh.position, childMesh.position)
-				
-				let absolutePosition = new Vector3(mesh.position.x + childMesh.position.x, mesh.position.y + childMesh.position.y, mesh.position.z + childMesh.position.z);
-				const body2 = childMesh.isInstancedMesh
-					? createInstancedBody(childMesh, density, childShape)
-					: createBody(childMesh, absolutePosition, childMesh.quaternion, density, childShape);
-				console.log("X")
+				let positionOffset = new Vector3(mesh.position.x, mesh.position.y, mesh.position.z);
+				const body2 = AddBody(childMesh, density, restitution, positionOffset);
+				if (body2 === null) return;
+
 				let params = RAPIER.JointData.fixed(
 					{ x: childMesh.position.x, y: childMesh.position.y, z: childMesh.position.z },
 					{ w: 1.0, x: 0.0, y: 0.0, z: 0.0 },
 					{ x: 0, y: 0, z: 0 },
 					{ w: childMesh.quaternion.w, x: childMesh.quaternion.x, y: childMesh.quaternion.y, z: childMesh.quaternion.z }
 				);
-				let joint = world.createImpulseJoint(params, body, body2, true);
+				let joint = world.createImpulseJoint(params, body._body, body2._body, true);
+
+				body._children.push(body2);
 			});
-
-
-
 		}
 
 		if (density > 0) {
@@ -127,62 +109,88 @@ async function RapierPhysics(gravity) {
 		}
 	}
 
-	function createInstancedBody(mesh, density, shape) {
+	function AddBody(mesh, density, restitution, positionOffset = null) {
+		const shape = getCollider(mesh.geometry);
+		if (shape === null) return;
+
+		shape.setDensity(density);
+		shape.setRestitution(restitution);
+		const body = mesh.isInstancedMesh
+			? createInstancedBody(mesh, density, shape, positionOffset)
+			: createBody(mesh, mesh.position, mesh.quaternion, density, shape, positionOffset);
+		return body;
+	}
+	function createInstancedBody(mesh, density, shape, positionOffset = null) {
 		const array = mesh.instanceMatrix.array;
 		const bodies = [];
 
 		for (let i = 0; i < mesh.count; i++) {
 			const position = _vector.fromArray(array, i * 16 + 12);
-			bodies.push(createBody(mesh, position, null, density, shape));
+			bodies.push(createBody(mesh, position, null, density, shape, positionOffset));
 		}
 		return bodies;
 	}
 
-	function createBody(mesh, position, quaternion, density, shape) {
+	function createBody(mesh, position, quaternion, density, shape, positionOffset = null) {
+		if (positionOffset) {
+			position = new Vector3(positionOffset.x + position.x, positionOffset.y + position.y, positionOffset.z + position.z);
+		}
+
 		const desc = density > 0 ? RAPIER.RigidBodyDesc.dynamic() : RAPIER.RigidBodyDesc.fixed();
 		desc.setTranslation(...position);
 		if (quaternion !== null) desc.setRotation(quaternion);
 
 		const body = world.createRigidBody(desc);
 		TrackedObjects.set(body.handle, { Mesh: mesh, Body: body });
-		world.createCollider(shape, body);
+		let collider = world.createCollider(shape, body);
 
-		return body;
+		return { _body: body, _collider: collider };
 	}
 
 	function setMeshPosition(mesh, position, index = 0) {
-		let body = meshMap.get(mesh);
-		if (mesh.isInstancedMesh) {
-			body = body[index];
-		}
+		let body = getPhysicsBody(mesh, index);
 		body.setAngvel(ZERO);
 		body.setLinvel(ZERO);
 		body.setTranslation(position);
 	}
 
 	function setMeshVelocity(mesh, velocity, index = 0) {
-		let body = meshMap.get(mesh);
-		if (mesh.isInstancedMesh) {
-			body = body[index];
-		}
+		let body = getPhysicsBody(mesh, index);
 		body.setLinvel(velocity);
 	}
 
-	function applyImpulse(mesh, velocity) {
-		let body = meshMap.get(mesh);
-		if (mesh.isInstancedMesh) {
-			body = body[index];
-		}
+	function applyImpulse(mesh, velocity, index = 0) {
+		let body = getPhysicsBody(mesh, index);
 		body.applyImpulse(velocity, true);
 	}
 
-	function getPhysicsBody(mesh) {
+	function moveMeshToStorage(mesh, position, index = 0) {
+		let body = getPhysicsBody(mesh, index);
+		body.setAngvel(ZERO);
+		body.setLinvel(ZERO);
+		body.setTranslation(position);
+		body.sleep();
+	}
+
+
+	function moveMeshFromStorage(mesh, position, velocity, index = 0) {
+		let body = getPhysicsBody(mesh, index);
+		body.wakeUp();
+		body.setTranslation(position);
+		body.setLinvel(velocity);
+		body.setAngvel(ZERO);
+	}
+
+	function getPhysicsBody(mesh, index = 0) {
 		let body = meshMap.get(mesh);
 		if (mesh.isInstancedMesh) {
-			body = body[index];
+			body = body[index]._body;
+		} else {
+			body = body._body;
 		}
 		return body;
 	}
+	
 	const clock = new Clock();
 
 	function step() {
@@ -226,7 +234,7 @@ async function RapierPhysics(gravity) {
 				const bodies = meshMap.get(mesh);
 
 				for (let j = 0; j < bodies.length; j++) {
-					const body = bodies[j];
+					const body = bodies[j]._body;
 
 					const position = body.translation();
 					_quaternion.copy(body.rotation());
@@ -237,8 +245,8 @@ async function RapierPhysics(gravity) {
 			} else {
 				const body = meshMap.get(mesh);
 
-				mesh.position.copy(body.translation());
-				mesh.quaternion.copy(body.rotation());
+				mesh.position.copy(body._body.translation());
+				mesh.quaternion.copy(body._body.rotation());
 			}
 		}
 	}
@@ -253,7 +261,9 @@ async function RapierPhysics(gravity) {
 		setMeshPosition: setMeshPosition,
 		setMeshVelocity: setMeshVelocity,
 		applyImpulse: applyImpulse,
-		getPhysicsBody: getPhysicsBody
+		getPhysicsBody: getPhysicsBody,
+		moveMeshToStorage: moveMeshToStorage,
+		moveMeshFromStorage: moveMeshFromStorage,
 	};
 
 }
