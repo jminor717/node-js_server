@@ -2,6 +2,7 @@
 
 import * as THREE from 'three';
 import Stats from 'three/addons/libs/stats.module.js';
+import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
 import * as Nodes from 'three/nodes';
 
 // import * as Objects from './CompressedObjects.js';
@@ -11,11 +12,13 @@ import * as Nodes from 'three/nodes';
 
 import { PointerLockControls, UserInputState } from '../NewGameNewLife/Controls.js';
 import { RapierPhysics } from './RapierPhysics.js';
-import { PidController } from './pid.js';
+// import { PidController } from './pid.js';
+// import { VectorPidController } from './vectorPid.js';
 import WebGPURenderer from 'three/addons/renderers/webgpu/WebGPURenderer.js';
-import { CreateWall, createColoredWall } from './bodyBuilder.js'
+import { CreateWall, createColoredWall, createCraft } from './bodyBuilder.js'
 import { PeerJsNetwork } from '..//NewGameNewLife/NetworkHelperClasses.js';
 import { InstancedCube, Craft, ObjectDefinition, ObjectIdentifier, ProjectileCollection, SingleProjectile, objectTypes, GenerateObjectFromArray } from '../NewGameNewLife/CompressedObjects.js';
+
 
 let camera, scene, renderer, stats, controls;
 let physics;
@@ -23,10 +26,10 @@ let UserInputs = new UserInputState(1);
 let network = new PeerJsNetwork();
 let craftMesh, craftView;
 network.WindowLog = (data) => { console.log(data); }
+let plane;
 
 const CameraOffset = new THREE.Vector3(0, 0, 0);
 const myVelocity = new THREE.Vector3();
-const rotationPID = PidController();
 
 
 let craftProperties = {
@@ -65,16 +68,29 @@ upgrades:
     Tuner: allow PID values for rotational tracking to be tuned manually allowing more control over rotation
 */
 
+let AuthorityLevels = [
+    { auth: 0.15, dampening: 0.005 },
+    { auth: 0.4, dampening: 0.1 },
+    { auth: 0.6, dampening: 0.5 },
+    { auth: 0.8, dampening: 1 },
+]
 
+const params = {
+    export: Callie,
+    controlAuthority: 0.2,
+    sqrt: 0.005,
+    levels: 0,
+    lockTarget: false
+};
+
+function Callie(){
+    params.controlAuthority = AuthorityLevels[params.levels].auth
+    params.sqrt = AuthorityLevels[params.levels].dampening
+    console.log("erfuiyb")
+}
 async function init() {
     network.start();
     physics = await RapierPhysics(new THREE.Vector3(0.0, 0.0, 0.0));
-    rotationPID.setTarget(0);
-    rotationPID.setGains(0.5, 0, 0.2);
-    rotationPID.setOutput(-10, 10, -10);
-    rotationPID.setItermLimit(-1, 1);
-    rotationPID.setMinError(0);
-
 
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x666666);
@@ -97,10 +113,7 @@ async function init() {
 
     camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.01, 1000);
     camera.position.set(craftPos.x, craftPos.y, craftPos.z);
-    
-
-
-    let ret = createCraft(craftProperties, craftPos, true)
+    let ret = createCraft(craftProperties, craftPos, true, scene, physics)
     craftMesh = ret.mesh;
     craftView = ret.view;
 
@@ -140,12 +153,13 @@ async function init() {
     const planeGeometry = new THREE.BoxGeometry(2, 2, 1);
     const sphereGeometry = new THREE.SphereGeometry(1);
 
-    const plane = new THREE.Mesh(planeGeometry, material);
+    plane = new THREE.Mesh(planeGeometry, material);
     const sphere = new THREE.Mesh(sphereGeometry, material);
     sphere.position.z = - 1.5;
     plane.position.x = 1.5;
     sphere.userData = { sphere: true }
     plane.userData = { plane: true }
+
 
     physics.addMesh(sphere, 3, 0.3);
     plane.userData = { isWall: true }
@@ -167,72 +181,26 @@ async function init() {
     // renderer.shadowMap.enabled = true;
     // renderer.outputColorSpace = THREE.SRGBColorSpace;
     // document.body.appendChild(renderer.domElement);
+    // renderer.setAnimationLoop(animate);
+
+    const gui = new GUI();
+
+    gui.add(params, 'export').name('Export DRC');
+    gui.add(params, 'controlAuthority', 0, 1, 0.1);
+    gui.add(params, 'sqrt', 0, 1, 0.01);
+    gui.add(params, 'levels', 0, 3, 1);
+    gui.add(params, 'lockTarget');
 
     stats = new Stats();
     document.body.appendChild(stats.dom);
 }
 
-function createCraft(CraftProperties, position, IsSelf){
-    // const craftGeometry = new THREE.IcosahedronGeometry(1, 1);//.toNonIndexed();
-    const craftGeometry = new THREE.SphereGeometry(1);//.toNonIndexed();
-    // const craftMaterial = new THREE.MeshLambertMaterial();
-    const material = new THREE.MeshPhongMaterial({ color: 0xff0000, flatShading: true });
-    const SeeThroughMaterial = new Nodes.MeshBasicNodeMaterial({ side: THREE.FrontSide });
-    const craftMaterial = new Nodes.MeshBasicNodeMaterial({ side: THREE.DoubleSide });
-    craftMaterial.colorNode = Nodes.normalLocal;
 
-
-    let _craftMesh = new THREE.Mesh(craftGeometry, material);
-    _craftMesh.position.set(position.x, position.y, position.z);
-    _craftMesh.userData = { IsCraft: true }
-    _craftMesh.visible = false;
-
-
-    let _craftView = new THREE.Mesh(craftGeometry, IsSelf ? SeeThroughMaterial : craftMaterial);
-    _craftView.castShadow = true;
-
-    // craftView.setRotationFromQuaternion()
-
-    CraftProperties.gunPositions.forEach(gun => {
-        const cylinderGeometry = new THREE.CylinderGeometry(0.25, 0.25, gun.z, 12);
-        // new THREE.BoxGeometry(0.5, 0.5, 0.5);
-        // const meshMaterial = new THREE.MeshPhongMaterial({ color: 0x156289, emissive: 0x072534, side: THREE.DoubleSide, flatShading: true });
-        const cylinder = new THREE.Mesh(cylinderGeometry, craftMaterial);
-        cylinder.position.set(gun.x, gun.y, gun.z / 2);
-        cylinder.rotateX(Math.PI / 2);
-        cylinder.castShadow = true;
-        cylinder.receiveShadow = true;
-        cylinder.userData = { IsCraft: true, parent: _craftMesh.uuid }
-
-        _craftMesh.add(cylinder);
-        _craftView.add(cylinder.clone());
-    })
-
-    const sightGeometry = new THREE.RingGeometry(0.1, 0.105, 16);
-    const sightGeometry2 = new THREE.RingGeometry(0.066, 0.071, 16);
-    const sightGeometry3 = new THREE.RingGeometry(0.033, 0.038, 16);
-    const sightGeometry4 = new THREE.SphereGeometry(0.005);
-    const sightMaterial = new THREE.MeshBasicMaterial({ color: 0x3D413D, side: THREE.DoubleSide });
-    const sightMesh = new THREE.Mesh(sightGeometry, sightMaterial);
-    const sightMesh2 = new THREE.Mesh(sightGeometry2, sightMaterial);
-    const sightMesh3 = new THREE.Mesh(sightGeometry3, sightMaterial);
-    const sightMesh4 = new THREE.Mesh(sightGeometry4, sightMaterial);
-    sightMesh.position.z = -1;
-    sightMesh.add(sightMesh2)
-    sightMesh.add(sightMesh3)
-    sightMesh.add(sightMesh4)
-    _craftView.add(sightMesh)
-
-    physics.addMesh(_craftMesh, 1, 0.3);
-    scene.add(_craftView);
-
-    return { mesh: _craftMesh, view: _craftView }
-}
 
 function bullet() {
 
-    let speed = 50;
-    let mass = 10;
+    let speed = 70;
+    let mass = 100;
 
     const material = new THREE.MeshPhongMaterial({
         color: 0xff0000,
@@ -292,8 +260,6 @@ network.OnData = (data, from) => {
 
 
     } else {
-        const group = new THREE.Group();
-
         // let craftPos = new THREE.Vector3(data.x, data.y, data.z)
         const craftGeometry = new THREE.IcosahedronGeometry(1, 2);//.toNonIndexed();
         // const craftMaterial = new THREE.MeshLambertMaterial();
@@ -331,13 +297,9 @@ network.OnPeerConnected = (id) => {
 init();
 
 function animate() {
-    // requestAnimationFrame(animate);
-    renderer.render(scene, camera);
-    stats.update();
-
     let tmpmove = new THREE.Vector3(0, 0, 0);
     let userRotation = 0; 
-    let controlAuthority = 0.2;
+    let controlAuthority = params.controlAuthority;
     if (controls.isLocked === true) {
         if (UserInputs.moveForward) tmpmove.z -= 1;
         if (UserInputs.moveBackward) tmpmove.z += 1;
@@ -356,8 +318,13 @@ function animate() {
         //     if (Math.abs(myVelocity.z) > 1) if (myVelocity.z < 0) tmpmove.z += 1; else tmpmove.z += -1;
         // }
     }
-    userRotation *= controlAuthority;
+    userRotation *= 0.25;
     camera.rotateOnAxis(new THREE.Vector3(0, 0, 1), userRotation)
+
+    if (params.lockTarget) {
+        // todo this makes the camera pan choppy. why?
+        camera.lookAt(new THREE.Vector3(0, 0, 0));
+    }
 
     tmpmove.applyQuaternion(craftView.quaternion);
     tmpmove.multiplyScalar(controlAuthority);
@@ -371,10 +338,15 @@ function animate() {
     mousePointing.applyQuaternion(physicsCraft.rotation())
 
     let error = craftPointing.clone().sub(mousePointing)
-    let correction = rotationPID.run(error.length());
+    // craftView.arrowHelper.setDirection(error.clone().normalize());
+    // craftView.arrowHelper.setLength(error.length());
     // apply 2 impulses on opposite sides of the craft in opposite directions so that there is only torque and no net force
-    physicsCraft.applyImpulseAtPoint(error.clone().normalize().multiplyScalar(correction), craftPointing, true)
-    physicsCraft.applyImpulseAtPoint(error.clone().normalize().negate().multiplyScalar(correction), craftPointing.clone().negate(), true)
+    physicsCraft.applyImpulseAtPoint(error, craftPointing, true)
+    physicsCraft.applyImpulseAtPoint(error.negate(), craftPointing.negate(), true)
+
+    let fn = (x) => { return Math.max((-((x - 2)^2)) + 4, 1);}
+    let xx = Math.min(Math.max(fn(error.length()) * params.sqrt, 0.05), 2)
+    physicsCraft.setAngularDamping(500 * xx);
 
 
     let mousePointing90 = new THREE.Vector3((controlAuthority * 5), 0, 0);
@@ -391,10 +363,8 @@ function animate() {
     if (UserInputs.activeDecelerate || (myVelocity.length() < 1 && UserInputs.AnyActiveDirectionalInputs() != true)) {
         // if decelerate is active or speed is low while no inputs are active
         physicsCraft.setLinearDamping(2);
-        physicsCraft.setAngularDamping(0);
     } else {
         physicsCraft.setLinearDamping(0);
-        physicsCraft.setAngularDamping(0);
     }
 
     // console.log(craft.children[0].position)
@@ -413,5 +383,7 @@ function animate() {
             }
         });
     }
-
+    renderer.render(scene, camera);
+    stats.update();
+    // requestAnimationFrame(animate);
 }
