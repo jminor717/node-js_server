@@ -83,7 +83,7 @@ const params = {
     lockTarget: false
 };
 
-function Callie(){
+function Callie() {
     params.controlAuthority = AuthorityLevels[params.levels].auth
     params.sqrt = AuthorityLevels[params.levels].dampening
     console.log("erfuiyb")
@@ -137,20 +137,21 @@ async function init() {
 
     let scale = 50;
     let offset = (scale / 2) - 2;
+    let phyDepth = 10;
     createColoredWall(scale, { x: 0, y: -offset, z: 0 }, { x: - Math.PI / 2 }, scene)
     createColoredWall(scale, { x: 0, y: offset, z: 0 }, { x: Math.PI / 2 }, scene)
     createColoredWall(scale, { x: 0, y: 0, z: offset }, { y: - Math.PI }, scene)
     createColoredWall(scale, { x: 0, y: 0, z: -offset }, {}, scene)
     createColoredWall(scale, { x: offset, y: 0, z: 0 }, { y: -Math.PI / 2 }, scene)
     createColoredWall(scale, { x: -offset, y: 0, z: 0 }, { y: Math.PI / 2 }, scene)
-    CreateWall({ x: scale, y: 1, z: scale }, { y: -offset }, scene, physics)
-    CreateWall({ x: scale, y: 1, z: scale }, { y: offset }, scene, physics)
-    CreateWall({ x: 1, y: scale, z: scale }, { x: -offset }, scene, physics)
-    CreateWall({ x: 1, y: scale, z: scale }, { x: offset }, scene, physics)
-    CreateWall({ x: scale, y: scale, z: 1 }, { z: -offset }, scene, physics)
-    CreateWall({ x: scale, y: scale, z: 1 }, { z: offset }, scene, physics)
+    CreateWall({ x: scale, y: phyDepth, z: scale }, { y: -offset - (phyDepth / 2) }, scene, physics)
+    CreateWall({ x: scale, y: phyDepth, z: scale }, { y: offset + (phyDepth / 2) }, scene, physics)
+    CreateWall({ x: phyDepth, y: scale, z: scale }, { x: -offset - (phyDepth / 2) }, scene, physics)
+    CreateWall({ x: phyDepth, y: scale, z: scale }, { x: offset + (phyDepth / 2) }, scene, physics)
+    CreateWall({ x: scale, y: scale, z: phyDepth }, { z: -offset - (phyDepth / 2) }, scene, physics)
+    CreateWall({ x: scale, y: scale, z: phyDepth }, { z: offset + (phyDepth / 2) }, scene, physics)
 
-    const planeGeometry = new THREE.BoxGeometry(2, 2, 1);
+    const planeGeometry = new THREE.BoxGeometry(2, 2, 2);
     const sphereGeometry = new THREE.SphereGeometry(1);
 
     plane = new THREE.Mesh(planeGeometry, material);
@@ -199,7 +200,7 @@ async function init() {
 
 function bullet() {
 
-    let speed = 70;
+    let speed = 80;
     let mass = 100;
 
     const material = new THREE.MeshPhongMaterial({
@@ -294,11 +295,19 @@ network.OnPeerConnected = (id) => {
     Peers[id] = { isConnected: false }
 }
 
+network.OnPeerDisconnected = (id) =>{
+    let peer = Peers[id];
+    if (peer) {
+        scene.remove(peer.mesh)
+        physics.removeMesh(peer.mesh);
+    }
+};
+
 init();
 
 function animate() {
     let tmpmove = new THREE.Vector3(0, 0, 0);
-    let userRotation = 0; 
+    let userRotation = 0;
     let controlAuthority = params.controlAuthority;
     if (controls.isLocked === true) {
         if (UserInputs.moveForward) tmpmove.z -= 1;
@@ -344,7 +353,7 @@ function animate() {
     physicsCraft.applyImpulseAtPoint(error, craftPointing, true)
     physicsCraft.applyImpulseAtPoint(error.negate(), craftPointing.negate(), true)
 
-    let fn = (x) => { return Math.max((-((x - 2)^2)) + 4, 1);}
+    let fn = (x) => { return Math.max((-((x - 2) ^ 2)) + 4, 1); }
     let xx = Math.min(Math.max(fn(error.length()) * params.sqrt, 0.05), 2)
     physicsCraft.setAngularDamping(500 * xx);
 
@@ -379,7 +388,7 @@ function animate() {
             myCraft: {
                 pos: craftMesh.position,
                 vel: physicsCraft.linvel(),
-                rot: dat,
+                rot: physicsCraft.rotation(),
             }
         });
     }
