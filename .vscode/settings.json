@@ -2,6 +2,7 @@
     "editor.renderWhitespace": "all",
     "cSpell.words": [
         "Collisiontarget",
+        "havok",
         "peerjs"
     ]
 }

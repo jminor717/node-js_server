@@ -11,6 +11,7 @@ import * as Nodes from 'three/nodes';
 // import { AmmoPhysics } from '../three.js/examples/jsm/physics/AmmoPhysics.js';
 
 import { PointerLockControls, UserInputState } from '../NewGameNewLife/Controls.js';
+import { _HavocPhysics } from './havokPhysics.js';
 import { RapierPhysics } from './RapierPhysics.js';
 // import { PidController } from './pid.js';
 // import { VectorPidController } from './vectorPid.js';
@@ -91,6 +92,7 @@ function Callie() {
 async function init() {
     network.start();
     physics = await RapierPhysics(new THREE.Vector3(0.0, 0.0, 0.0));
+    // physics = await _HavocPhysics([0, 0, 0]);
 
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x666666);
@@ -200,7 +202,7 @@ async function init() {
 
 function bullet() {
 
-    let speed = 80;
+    let speed = 100;
     let mass = 100;
 
     const material = new THREE.MeshPhongMaterial({
@@ -210,7 +212,8 @@ function bullet() {
     const sphereGeometry = new THREE.SphereGeometry(0.25);
     const sphere = new THREE.Mesh(sphereGeometry, material);
 
-    let craftOffset = new THREE.Vector3(0, 0, -1.5)
+    // let craftOffset = new THREE.Vector3(0, 0, -1.5)
+    let craftOffset = new THREE.Vector3(0, 0, -4)
     craftOffset.applyQuaternion(craftView.quaternion);
     craftOffset.add(craftView.position);
 
@@ -219,6 +222,7 @@ function bullet() {
     bulletVel.add(myVelocity);
 
     sphere.position.set(craftOffset.x, craftOffset.y, craftOffset.z)
+    // sphere.position.set(0, 0, 0)
     scene.add(sphere)
     physics.addMesh(sphere, mass);
     physics.setMeshVelocity(sphere, bulletVel)
@@ -252,12 +256,13 @@ network.OnData = (data, from) => {
     if (peer.isConnected) {
         // peer.mesh.position.set(data.x, data.y, data.z);
         // console.log(data)
-        let physicsCraft = physics.getPhysicsBody(peer.mesh)
-        physicsCraft.setAngvel(new THREE.Vector3());
-        // physicsCraft.setAngvel(data.myCraft.rot);
-        physicsCraft.setLinvel(data.myCraft.vel);
-        physicsCraft.setTranslation(data.myCraft.pos);
-        physicsCraft.setRotation(data.myCraft.rot);
+        // TODO: havok
+        // let physicsCraft = physics.getPhysicsBody(peer.mesh)
+        // physicsCraft.setAngvel(new THREE.Vector3());
+        // // physicsCraft.setAngvel(data.myCraft.rot);
+        // physicsCraft.setLinvel(data.myCraft.vel);
+        // physicsCraft.setTranslation(data.myCraft.pos);
+        // physicsCraft.setRotation(data.myCraft.rot);
 
 
     } else {
@@ -295,11 +300,11 @@ network.OnPeerConnected = (id) => {
     Peers[id] = { isConnected: false }
 }
 
-network.OnPeerDisconnected = (id) =>{
+network.OnPeerDisconnected = (id) => {
     let peer = Peers[id];
     if (peer) {
         scene.remove(peer.mesh)
-        physics.removeMesh(peer.mesh);
+        // physics.removeMesh(peer.mesh);
     }
 };
 
@@ -338,60 +343,63 @@ function animate() {
     tmpmove.applyQuaternion(craftView.quaternion);
     tmpmove.multiplyScalar(controlAuthority);
 
-    let physicsCraft = physics.getPhysicsBody(craftMesh)
-    physicsCraft.applyImpulse(tmpmove, true)
+    // TODO: havok
+    // let physicsCraft = physics.getPhysicsBody(craftMesh)
+    // // physics.havok.HP_Body_ApplyImpulse(physicsCraft, [0,0,0], [0,0,0])
+    // physicsCraft.applyImpulse(tmpmove, true)
 
-    let mousePointing = new THREE.Vector3(0, 0, -(controlAuthority * 5));
-    let craftPointing = new THREE.Vector3(0, 0, -(controlAuthority * 5));
-    craftPointing.applyQuaternion(camera.quaternion)
-    mousePointing.applyQuaternion(physicsCraft.rotation())
+    // let mousePointing = new THREE.Vector3(0, 0, -(controlAuthority * 5));
+    // let craftPointing = new THREE.Vector3(0, 0, -(controlAuthority * 5));
+    // craftPointing.applyQuaternion(camera.quaternion)
+    // mousePointing.applyQuaternion(physicsCraft.rotation())
 
-    let error = craftPointing.clone().sub(mousePointing)
-    // craftView.arrowHelper.setDirection(error.clone().normalize());
-    // craftView.arrowHelper.setLength(error.length());
-    // apply 2 impulses on opposite sides of the craft in opposite directions so that there is only torque and no net force
-    physicsCraft.applyImpulseAtPoint(error, craftPointing, true)
-    physicsCraft.applyImpulseAtPoint(error.negate(), craftPointing.negate(), true)
+    // let error = craftPointing.clone().sub(mousePointing)
+    // // craftView.arrowHelper.setDirection(error.clone().normalize());
+    // // craftView.arrowHelper.setLength(error.length());
+    // // apply 2 impulses on opposite sides of the craft in opposite directions so that there is only torque and no net force
+    // physicsCraft.applyImpulseAtPoint(error, craftPointing, true)
+    // physicsCraft.applyImpulseAtPoint(error.negate(), craftPointing.negate(), true)
 
-    let fn = (x) => { return Math.max((-((x - 2) ^ 2)) + 4, 1); }
-    let xx = Math.min(Math.max(fn(error.length()) * params.sqrt, 0.05), 2)
-    physicsCraft.setAngularDamping(500 * xx);
-
-
-    let mousePointing90 = new THREE.Vector3((controlAuthority * 5), 0, 0);
-    let craftPointing90 = new THREE.Vector3((controlAuthority * 5), 0, 0);
-    craftPointing90.applyQuaternion(camera.quaternion)
-    mousePointing90.applyQuaternion(physicsCraft.rotation())
-    physicsCraft.applyImpulseAtPoint(craftPointing90.clone().sub(mousePointing90), craftPointing90, true)
-    physicsCraft.applyImpulseAtPoint(craftPointing90.clone().sub(mousePointing90).negate(), craftPointing90.clone().negate(), true)
+    // let fn = (x) => { return Math.max((-((x - 2) ^ 2)) + 4, 1); }
+    // let xx = Math.min(Math.max(fn(error.length()) * params.sqrt, 0.05), 2)
+    // physicsCraft.setAngularDamping(500 * xx);
 
 
-    let craftVel = physicsCraft.linvel()
-    myVelocity.set(craftVel.x, craftVel.y, craftVel.z)
+    // let mousePointing90 = new THREE.Vector3((controlAuthority * 5), 0, 0);
+    // let craftPointing90 = new THREE.Vector3((controlAuthority * 5), 0, 0);
+    // craftPointing90.applyQuaternion(camera.quaternion)
+    // mousePointing90.applyQuaternion(physicsCraft.rotation())
+    // physicsCraft.applyImpulseAtPoint(craftPointing90.clone().sub(mousePointing90), craftPointing90, true)
+    // physicsCraft.applyImpulseAtPoint(craftPointing90.clone().sub(mousePointing90).negate(), craftPointing90.clone().negate(), true)
 
-    if (UserInputs.activeDecelerate || (myVelocity.length() < 1 && UserInputs.AnyActiveDirectionalInputs() != true)) {
-        // if decelerate is active or speed is low while no inputs are active
-        physicsCraft.setLinearDamping(2);
-    } else {
-        physicsCraft.setLinearDamping(0);
-    }
 
-    // console.log(craft.children[0].position)
+    // let craftVel = physicsCraft.linvel()
+    // myVelocity.set(craftVel.x, craftVel.y, craftVel.z)
+
+    // if (UserInputs.activeDecelerate || (myVelocity.length() < 1 && UserInputs.AnyActiveDirectionalInputs() != true)) {
+    //     // if decelerate is active or speed is low while no inputs are active
+    //     physicsCraft.setLinearDamping(2);
+    // } else {
+    //     physicsCraft.setLinearDamping(0);
+    // }
+
+    // // console.log(craft.children[0].position)
     camera.position.set(craftMesh.position.x + CameraOffset.x, craftMesh.position.y + CameraOffset.y, craftMesh.position.z + CameraOffset.z);
     craftView.position.set(craftMesh.position.x, craftMesh.position.y, craftMesh.position.z);
-    craftView.setRotationFromQuaternion(physicsCraft.rotation())
+    // craftView.setRotationFromQuaternion(physicsCraft.rotation())
+    craftView.setRotationFromQuaternion(camera.quaternion)
 
     // if (network.connTracker.numConnection() > 0) {
-    if (Object.keys(Peers).length > 0) {
-        let dat = { x: camera.quaternion.x, y: camera.quaternion.y, z: camera.quaternion.z, w: camera.quaternion.w };
-        network.Broadcast({
-            myCraft: {
-                pos: craftMesh.position,
-                vel: physicsCraft.linvel(),
-                rot: physicsCraft.rotation(),
-            }
-        });
-    }
+    // if (Object.keys(Peers).length > 0) {
+    //     let dat = { x: camera.quaternion.x, y: camera.quaternion.y, z: camera.quaternion.z, w: camera.quaternion.w };
+    //     network.Broadcast({
+    //         myCraft: {
+    //             pos: craftMesh.position,
+    //             vel: physicsCraft.linvel(),
+    //             rot: physicsCraft.rotation(),
+    //         }
+    //     });
+    // }
     renderer.render(scene, camera);
     stats.update();
     // requestAnimationFrame(animate);
