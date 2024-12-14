@@ -63,6 +63,9 @@ upgrades:
         when in use you are also highted for all players 
 
     Tuner: allow PID values for rotational tracking to be tuned manually allowing more control over rotation
+    
+    Rest Mass manipulation field: add ability to increase craft gravity, pulling objects towards the craft.
+        -> black hole cannon: shoot out a black hole that pules in objects then after a certain time or when releasing the trigger blows them all away
 */
 
 
