@@ -109,8 +109,8 @@ async function RapierPhysics(gravity) {
 		}
 	}
 
-	function removeMesh(mesh, index = 0){
-		let body = getPhysicsBody(mesh, index);
+	function removeMesh(mesh, index = 0, physicsBody = null) {
+		let body = physicsBody ?? getPhysicsBody(mesh, index);
 
 
 		let ind = meshes.findIndex(x => x.uuid == mesh.uuid);
@@ -159,25 +159,25 @@ async function RapierPhysics(gravity) {
 		return { _body: body, _collider: collider };
 	}
 
-	function setMeshPosition(mesh, position, index = 0) {
-		let body = getPhysicsBody(mesh, index);
+	function setMeshPosition(mesh, position, index = 0, physicsBody = null) {
+		let body = physicsBody ?? getPhysicsBody(mesh, index);
 		body.setAngvel(ZERO);
 		body.setLinvel(ZERO);
 		body.setTranslation(position);
 	}
 
-	function setMeshVelocity(mesh, velocity, index = 0) {
-		let body = getPhysicsBody(mesh, index);
+	function setMeshVelocity(mesh, velocity, index = 0, physicsBody = null) {
+		let body = physicsBody ?? getPhysicsBody(mesh, index);
 		body.setLinvel(velocity);
 	}
 
-	function applyImpulse(mesh, velocity, index = 0) {
-		let body = getPhysicsBody(mesh, index);
+	function applyImpulse(mesh, velocity, index = 0, physicsBody = null) {
+		let body = physicsBody ?? getPhysicsBody(mesh, index);
 		body.applyImpulse(velocity, true);
 	}
 
-	function moveMeshToStorage(mesh, position, index = 0) {
-		let body = getPhysicsBody(mesh, index);
+	function moveMeshToStorage(mesh, position, index = 0, physicsBody = null) {
+		let body = physicsBody ?? getPhysicsBody(mesh, index);
 		body.setAngvel(ZERO);
 		body.setLinvel(ZERO);
 		body.setTranslation(position);
@@ -185,8 +185,8 @@ async function RapierPhysics(gravity) {
 	}
 
 
-	function moveMeshFromStorage(mesh, position, velocity, index = 0) {
-		let body = getPhysicsBody(mesh, index);
+	function moveMeshFromStorage(mesh, position, velocity, index = 0, physicsBody = null) {
+		let body = physicsBody ?? getPhysicsBody(mesh, index);
 		body.wakeUp();
 		body.setTranslation(position);
 		body.setLinvel(velocity);
@@ -202,7 +202,7 @@ async function RapierPhysics(gravity) {
 		}
 		return body;
 	}
-	
+
 	const clock = new Clock();
 
 	function step() {

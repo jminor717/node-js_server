@@ -91,8 +91,8 @@ function Callie() {
 }
 async function init() {
     network.start();
-    physics = await RapierPhysics(new THREE.Vector3(0.0, 0.0, 0.0));
-    // physics = await _HavocPhysics([0, 0, 0]);
+    // physics = await RapierPhysics(new THREE.Vector3(0.0, 0.0, 0.0));
+    physics = await _HavocPhysics([0, 0, 0]);
 
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x666666);
@@ -166,7 +166,7 @@ async function init() {
 
     physics.addMesh(sphere, 3, 0.3);
     plane.userData = { isWall: true }
-    physics.addMesh(plane);
+    physics.addMesh(plane, 3, 0.3);
 
     scene.add(plane);
     scene.add(sphere);
@@ -202,8 +202,8 @@ async function init() {
 
 function bullet() {
 
-    let speed = 100;
-    let mass = 100;
+    let speed = 90;
+    let mass = 10;
 
     const material = new THREE.MeshPhongMaterial({
         color: 0xff0000,
@@ -224,7 +224,7 @@ function bullet() {
     sphere.position.set(craftOffset.x, craftOffset.y, craftOffset.z)
     // sphere.position.set(0, 0, 0)
     scene.add(sphere)
-    physics.addMesh(sphere, mass);
+    physics.addMesh(sphere, mass, 0.2);
     physics.setMeshVelocity(sphere, bulletVel)
 }
 
@@ -310,6 +310,20 @@ network.OnPeerDisconnected = (id) => {
 
 init();
 
+function createCraftRotationForces(startingVector, physicsCraft){
+    let mousePointing = startingVector;
+    let craftPointing = startingVector.clone();
+    craftPointing.applyQuaternion(camera.quaternion)
+    mousePointing.applyQuaternion(physicsCraft.rotation())
+
+    let error = craftPointing.clone().sub(mousePointing)
+    // apply 2 impulses on opposite sides of the craft in opposite directions so that there is only torque and no net force
+    physicsCraft.applyImpulseAtPoint(error, craftPointing, true)
+    physicsCraft.applyImpulseAtPoint(error.negate(), craftPointing.negate(), true)
+
+    return error;
+}
+
 function animate() {
     let tmpmove = new THREE.Vector3(0, 0, 0);
     let userRotation = 0;
@@ -348,30 +362,14 @@ function animate() {
     // // physics.havok.HP_Body_ApplyImpulse(physicsCraft, [0,0,0], [0,0,0])
     // physicsCraft.applyImpulse(tmpmove, true)
 
-    // let mousePointing = new THREE.Vector3(0, 0, -(controlAuthority * 5));
-    // let craftPointing = new THREE.Vector3(0, 0, -(controlAuthority * 5));
-    // craftPointing.applyQuaternion(camera.quaternion)
-    // mousePointing.applyQuaternion(physicsCraft.rotation())
-
-    // let error = craftPointing.clone().sub(mousePointing)
+    // createCraftRotationForces(new THREE.Vector3((controlAuthority * 5), 0, 0), physicsCraft)
+    // let error = createCraftRotationForces(new THREE.Vector3(0, 0, (controlAuthority * 5)), physicsCraft)
     // // craftView.arrowHelper.setDirection(error.clone().normalize());
     // // craftView.arrowHelper.setLength(error.length());
-    // // apply 2 impulses on opposite sides of the craft in opposite directions so that there is only torque and no net force
-    // physicsCraft.applyImpulseAtPoint(error, craftPointing, true)
-    // physicsCraft.applyImpulseAtPoint(error.negate(), craftPointing.negate(), true)
 
     // let fn = (x) => { return Math.max((-((x - 2) ^ 2)) + 4, 1); }
     // let xx = Math.min(Math.max(fn(error.length()) * params.sqrt, 0.05), 2)
     // physicsCraft.setAngularDamping(500 * xx);
-
-
-    // let mousePointing90 = new THREE.Vector3((controlAuthority * 5), 0, 0);
-    // let craftPointing90 = new THREE.Vector3((controlAuthority * 5), 0, 0);
-    // craftPointing90.applyQuaternion(camera.quaternion)
-    // mousePointing90.applyQuaternion(physicsCraft.rotation())
-    // physicsCraft.applyImpulseAtPoint(craftPointing90.clone().sub(mousePointing90), craftPointing90, true)
-    // physicsCraft.applyImpulseAtPoint(craftPointing90.clone().sub(mousePointing90).negate(), craftPointing90.clone().negate(), true)
-
 
     // let craftVel = physicsCraft.linvel()
     // myVelocity.set(craftVel.x, craftVel.y, craftVel.z)
@@ -389,7 +387,6 @@ function animate() {
     // craftView.setRotationFromQuaternion(physicsCraft.rotation())
     craftView.setRotationFromQuaternion(camera.quaternion)
 
-    // if (network.connTracker.numConnection() > 0) {
     // if (Object.keys(Peers).length > 0) {
     //     let dat = { x: camera.quaternion.x, y: camera.quaternion.y, z: camera.quaternion.z, w: camera.quaternion.w };
     //     network.Broadcast({

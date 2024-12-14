@@ -37,6 +37,11 @@ function getCollider(geometry) {
     } else if (geometry.type === 'CylinderGeometry') {
         const radius = Math.abs(parameters.radiusTop !== undefined ? parameters.radiusTop : 1);
         const halfHeigh = Math.abs(parameters.height !== undefined ? parameters.height / 2 : 0.5);
+        console.log(havok.HP_Shape_CreateCylinder)
+        collider = havok.HP_Shape_CreateCylinder(
+            [0, 0, 0], [0, 0, 0], [radius, halfHeigh]
+        )[1]
+        
         // console.log(parameters, radius, halfHeigh)
         //Cylinder
         // collider = RAPIER.ColliderDesc.cylinder(halfHeigh, radius);
@@ -64,27 +69,27 @@ async function _HavocPhysics(gravity) {
         const body = AddBody(mesh, density, restitution);
         if (body === null) return;
 
-        // if (mesh.children.length > 0) {
-        //     // console.log(mesh);
-        //     body._children = []
-        //     mesh.children.forEach(childMesh => {
-        //         // console.log("Z")
+        if (mesh.children.length > 0) {
+            // console.log(mesh);
+            body._children = []
+            mesh.children.forEach(childMesh => {
+                // console.log("Z")
 
-        //         let positionOffset = new Vector3(mesh.position.x, mesh.position.y, mesh.position.z);
-        //         const body2 = AddBody(childMesh, density, restitution, positionOffset);
-        //         if (body2 === null) return;
+                let positionOffset = new Vector3(mesh.position.x, mesh.position.y, mesh.position.z);
+                const body2 = AddBody(childMesh, density, restitution, positionOffset);
+                if (body2 === null) return;
 
-        //         let params = RAPIER.JointData.fixed(
-        //             { x: childMesh.position.x, y: childMesh.position.y, z: childMesh.position.z },
-        //             { w: 1.0, x: 0.0, y: 0.0, z: 0.0 },
-        //             { x: 0, y: 0, z: 0 },
-        //             { w: childMesh.quaternion.w, x: childMesh.quaternion.x, y: childMesh.quaternion.y, z: childMesh.quaternion.z }
-        //         );
-        //         let joint = world.createImpulseJoint(params, body._body, body2._body, true);
+                // let params = RAPIER.JointData.fixed(
+                //     { x: childMesh.position.x, y: childMesh.position.y, z: childMesh.position.z },
+                //     { w: 1.0, x: 0.0, y: 0.0, z: 0.0 },
+                //     { x: 0, y: 0, z: 0 },
+                //     { w: childMesh.quaternion.w, x: childMesh.quaternion.x, y: childMesh.quaternion.y, z: childMesh.quaternion.z }
+                // );
+                // let joint = world.createImpulseJoint(params, body._body, body2._body, true);
 
-        //         body._children.push(body2);
-        //     });
-        // }
+                body._children.push(body2);
+            });
+        }
 
         if (density > 0) {
             meshes.push(mesh);
@@ -92,8 +97,8 @@ async function _HavocPhysics(gravity) {
         }
     }
 
-    function removeMesh(mesh, index = 0) {
-        let body = getPhysicsBody(mesh, index);
+    function removeMesh(mesh, index = 0, physicsBody = null) {
+        let body = physicsBody ?? getPhysicsBody(mesh, index);
 
 
         let ind = meshes.findIndex(x => x.uuid == mesh.uuid);
@@ -130,14 +135,22 @@ async function _HavocPhysics(gravity) {
         }
 
         const Body = havok.HP_Body_Create()[1];
-        havok.HP_Shape_SetDensity(shape, density);
+        // console.log(havok.HP_Body_GetMassProperties(Body)[1], havok.HP_Shape_GetDensity(shape)[1])
+
+        // havok.HP_Shape_SetDensity(shape, density);
+        havok.HP_Body_SetMassProperties(Body, [[0, 0, 0], density, [density, density, density], [0, 0, 0, 1]])
+        // console.log(havok.HP_Body_GetMassProperties(Body)[1], havok.HP_Shape_GetDensity(shape)[1])
+
         havok.HP_Body_SetShape(Body, shape);
+        // console.log(havok.HP_Body_GetMassProperties(Body)[1], havok.HP_Shape_GetDensity(shape)[1])
+
         havok.HP_Body_SetQTransform(Body, [[position.x, position.y, position.z], [quaternion.x, quaternion.y, quaternion.z, quaternion.w]])
         havok.HP_World_AddBody(world, Body, false);
+        // console.log(havok.HP_Body_GetMassProperties(Body)[1], havok.HP_Shape_GetDensity(shape)[1])
 
         if (density > 0) {
             //DYNAMIC, KINEMATIC, STATIC
-            console.log(havok.MotionType["DYNAMIC"])
+            // console.log(havok.MotionType["DYNAMIC"])
             havok.HP_Body_SetMotionType(Body, havok.MotionType["DYNAMIC"]);
         } else {
             havok.HP_Body_SetMotionType(Body, havok.MotionType["STATIC"]);
@@ -148,25 +161,25 @@ async function _HavocPhysics(gravity) {
         return { _body: Body, _offset: havok.HP_Body_GetWorldTransformOffset(Body)[1] };
     }
 
-    function setMeshPosition(mesh, position, index = 0) {
-        let body = getPhysicsBody(mesh, index);
+    function setMeshPosition(mesh, position, index = 0, physicsBody = null) {
+        let body = physicsBody ?? getPhysicsBody(mesh, index);
         // body.setAngvel(ZERO);
         // body.setLinvel(ZERO);
         // body.setTranslation(position);
     }
 
-    function setMeshVelocity(mesh, velocity, index = 0) {
-        let body = getPhysicsBody(mesh, index);
+    function setMeshVelocity(mesh, velocity, index = 0, physicsBody = null) {
+        let body = physicsBody ?? getPhysicsBody(mesh, index);
         havok.HP_Body_SetLinearVelocity(body, [velocity.x, velocity.y, velocity.z])
     }
 
-    function applyImpulse(mesh, velocity, index = 0) {
-        let body = getPhysicsBody(mesh, index);
+    function applyImpulse(mesh, velocity, index = 0, physicsBody = null) {
+        let body = physicsBody ?? getPhysicsBody(mesh, index);
         // body.applyImpulse(velocity, true);
     }
 
-    function moveMeshToStorage(mesh, position, index = 0) {
-        let body = getPhysicsBody(mesh, index);
+    function moveMeshToStorage(mesh, position, index = 0, physicsBody = null) {
+        let body = physicsBody ?? getPhysicsBody(mesh, index);
         // body.setAngvel(ZERO);
         // body.setLinvel(ZERO);
         // body.setTranslation(position);
@@ -174,8 +187,8 @@ async function _HavocPhysics(gravity) {
     }
 
 
-    function moveMeshFromStorage(mesh, position, velocity, index = 0) {
-        let body = getPhysicsBody(mesh, index);
+    function moveMeshFromStorage(mesh, position, velocity, index = 0, physicsBody = null) {
+        let body = physicsBody ?? getPhysicsBody(mesh, index);
         // body.wakeUp();
         // body.setTranslation(position);
         // body.setLinvel(velocity);
