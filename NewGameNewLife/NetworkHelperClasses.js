@@ -198,6 +198,7 @@ class PeerJsNetwork {
 
     OnData = (data, from) => { }
     OnPeerConnected = (remoteId) => { }
+    OnPeerDisconnected = (remoteId) => { }
     OnNetworkReady = () => {}
 
     constructor() {
@@ -214,6 +215,8 @@ class PeerJsNetwork {
     }
 
     NotifyPlayerLeftNetwork(playerId) {
+        this.connTracker.remove(playerId)
+        this.OnPeerDisconnected(playerId)
         this._sendPeerIdUpdate({ Action: "LeaveNetwork", RemoveId: playerId })
     }
 
@@ -344,7 +347,6 @@ class PeerJsNetwork {
                         this.RemovedInitialPeers[FailedConId]++;
                         if (this.RemovedInitialPeers[FailedConId] <= 2) {
                             this.NotifyPlayerLeftNetwork(FailedConId);
-                            this.connTracker.remove(FailedConId)
                         }
                     }
                 }
@@ -439,7 +441,6 @@ class PeerJsNetwork {
         conn.on("close", () => {
             console.log(`disconnected: ${peerID}`);
             this.NotifyPlayerLeftNetwork(peerID);
-            this.connTracker.remove(peerID)
             if (!this.connTracker.getServer() && !this.AmServer) {
                 if (this.connTracker.numConnection() === 0) {
                     // no active connections assume the server role

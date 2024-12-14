@@ -31,7 +31,7 @@ function getCollider(geometry) {
 	} else if (geometry.type === 'CylinderGeometry') {
 		const radius = Math.abs(parameters.radiusTop !== undefined ? parameters.radiusTop : 1);
 		const halfHeigh = Math.abs(parameters.height !== undefined ? parameters.height / 2 : 0.5);
-		console.log(parameters, radius, halfHeigh)
+		// console.log(parameters, radius, halfHeigh)
 		//Cylinder
 		collider = RAPIER.ColliderDesc.cylinder(halfHeigh, radius);
 	}
@@ -82,10 +82,10 @@ async function RapierPhysics(gravity) {
 		if (body === null) return;
 
 		if (mesh.children.length > 0) {
-			console.log(mesh);
+			// console.log(mesh);
 			body._children = []
 			mesh.children.forEach(childMesh => {
-				console.log("Z")
+				// console.log("Z")
 
 				let positionOffset = new Vector3(mesh.position.x, mesh.position.y, mesh.position.z);
 				const body2 = AddBody(childMesh, density, restitution, positionOffset);
@@ -107,6 +107,18 @@ async function RapierPhysics(gravity) {
 			meshes.push(mesh);
 			meshMap.set(mesh, body);
 		}
+	}
+
+	function removeMesh(mesh, index = 0){
+		let body = getPhysicsBody(mesh, index);
+
+
+		let ind = meshes.findIndex(x => x.uuid == mesh.uuid);
+		console.log(mesh, body, ind)
+
+		meshes.splice(ind, 1)
+		meshMap.delete(mesh);
+
 	}
 
 	function AddBody(mesh, density, restitution, positionOffset = null) {
@@ -206,12 +218,12 @@ async function RapierPhysics(gravity) {
 				let obj1 = TrackedObjects.get(handle1), obj2 = TrackedObjects.get(handle2);
 				let IsWall = obj1.Mesh.userData?.isWall || obj2.Mesh.userData?.isWall;
 				if (IsWall) {
-					console.log(started, "with wall");
+					// console.log(started, "with wall");
 				} else {
 					if (obj1.Mesh.userData?.IsChild) {
-						console.log(obj1.Mesh.userData.parent, obj2.Mesh.uuid)
+						// console.log(obj1.Mesh.userData.parent, obj2.Mesh.uuid)
 					}
-					console.log(started, handle1, obj1.Mesh.userData, handle2, obj2.Mesh.userData, obj1, obj2);
+					// console.log(started, handle1, obj1.Mesh.userData, handle2, obj2.Mesh.userData, obj1, obj2);
 					//childMesh.userData = { IsChild
 				}
 			} catch (error) {
@@ -223,7 +235,7 @@ async function RapierPhysics(gravity) {
 		eventQueue.drainContactForceEvents(event => {
 			let handle1 = event.collider1(); // Handle of the first collider involved in the event.
 			let handle2 = event.collider2(); // Handle of the second collider involved in the event.
-			console.log(event, TrackedObjects.get(handle1), TrackedObjects.get(handle2));
+			// console.log(event, TrackedObjects.get(handle1), TrackedObjects.get(handle2));
 			/* Handle the contact force event. */
 		});
 
@@ -264,6 +276,7 @@ async function RapierPhysics(gravity) {
 		getPhysicsBody: getPhysicsBody,
 		moveMeshToStorage: moveMeshToStorage,
 		moveMeshFromStorage: moveMeshFromStorage,
+		removeMesh: removeMesh,
 	};
 
 }
