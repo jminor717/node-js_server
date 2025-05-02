@@ -1,22 +1,45 @@
+import { UserInputState } from './Controls.js';
 
 
+let UserInputs = new UserInputState(1);
+document.addEventListener('keydown', (xvt) => UserInputs.onKeyDown(xvt));
+document.addEventListener('keyup', (xvt) => UserInputs.onKeyUp(xvt));
 
 const canvas = document.getElementById("renderCanvas");
-const engine = new BABYLON.Engine(canvas, true, { preserveDrawingBuffer: true, stencil: true, disableWebGL2Support: false });
+// const engine = new BABYLON.Engine(canvas, true, { preserveDrawingBuffer: true, stencil: true, disableWebGL2Support: false });
+let camera;
+
+let craftProperties = {
+    mass: 1,
+    inertia: 1,
+    gunPositions: [
+        new BABYLON.Vector3(-0.7, -0.7, 1),
+        new BABYLON.Vector3(0.7, -0.7, 1),
+        new BABYLON.Vector3(0.7, 0.7, 1),
+        new BABYLON.Vector3(-0.7, 0.7, 1)
+    ],
+    currentGunIndex: 0
+}
+
+const engine = new BABYLON.WebGPUEngine(canvas);
+engine.compatibilityMode = false
 const createScene = async function () {
+    await engine.initAsync(); // only for web gpu
     // https://playground.babylonjs.com/#MZKDQT#5
+    // erosion compute shader https://playground.babylonjs.com/?webgpu#C90R62#16
+
     let gravity = 0;
-    var scene = new BABYLON.Scene(engine);
+    let scene = new BABYLON.Scene(engine);
     scene.performancePriority = BABYLON.ScenePerformancePriority.Aggressive;
     // scene.ambientColor = new BABYLON.Color3(200, 0, 10);
 
-    var light = new BABYLON.HemisphericLight("light1", new BABYLON.Vector3(0, 1, 0), scene);// This creates a light, aiming 0,1,0 - to the sky (non-mesh)
+    let light = new BABYLON.HemisphericLight("light1", new BABYLON.Vector3(0, 1, 0), scene);// This creates a light, aiming 0,1,0 - to the sky (non-mesh)
     light.intensity = 0.7;// Default intensity is 1. Let's dim the light a small amount
 
-    var dirLight = new BABYLON.DirectionalLight("dirLight", new BABYLON.Vector3(0, -1, 1));
+    let dirLight = new BABYLON.DirectionalLight("dirLight", new BABYLON.Vector3(0, -1, 1));
     dirLight.autoCalcShadowZBounds = true;
     dirLight.intensity = 0.2;
-    var shadowGen = new BABYLON.ShadowGenerator(1024, dirLight);
+    let shadowGen = new BABYLON.ShadowGenerator(1024, dirLight);
     shadowGen.bias = 0.01;
     shadowGen.usePercentageCloserFiltering = true;
 
@@ -37,9 +60,6 @@ const createScene = async function () {
     scene.enablePhysics(new BABYLON.Vector3(0, -gravity, 0), hk); // enable physics in the scene with a gravity
     let physicsEngine = scene.getPhysicsEngine();
 
-    physicsMaterial = { friction: 0.2, restitution: 1 };
-    bodyRenderingMaterial = new BABYLON.StandardMaterial("mat", scene);
-
     // body/shape on box
     BoxWorld(scene, new BABYLON.Vector3(0, -10, 0), 100, shadowGen);
 
@@ -54,8 +74,10 @@ const createScene = async function () {
     //     });
     // }
 
+    let boxShape = new BABYLON.PhysicsShapeBox(new BABYLON.Vector3(0, 0, 0), BABYLON.Quaternion.Identity(), new BABYLON.Vector3(1, 1, 1), scene);
+    let instanceBox = BABYLON.MeshBuilder.CreateBox("root", { size: 1 });
 
-    const instance = instancesBody(scene, new BABYLON.Vector3(0, 10, 0), shadowGen);
+    const instance = instancesBody(scene, new BABYLON.Vector3(0, 10, 0), shadowGen, instanceBox, boxShape);
 
     const positionMatrix = BABYLON.Matrix.Identity();
     positionMatrix.setTranslationFromFloats(0, 10, 0);
@@ -66,11 +88,8 @@ const createScene = async function () {
     instance.physicsBody.updateBodyInstances();
 
     // This creates and positions a free camera (non-mesh)
-    // const camera = new BABYLON.FreeCamera("camera1", new BABYLON.Vector3(0, 5, -10), scene);
-    // const camera = new BABYLON.FollowCamera("camera1", new BABYLON.Vector3(0, 0, 0), scene, sphere)
     // const camera = new BABYLON.ArcFollowCamera("camera1", -Math.PI / 2, Math.PI / 2.5, 15, sphere, scene );
     // const camera = new BABYLON.ArcRotateCamera("camera1", -Math.PI / 2, Math.PI / 2.5, 15, new BABYLON.Vector3(0, 0, 0));
-    // const camera = new BABYLON.Camera("camera1", new BABYLON.Vector3(0, 5, -10), scene, true)
 
 
 
@@ -98,7 +117,7 @@ const createScene = async function () {
 
 
     console.log(sphere)
-    let phy_sphere = bindBodyShape(sphere, shape, scene)
+    let phy_sphere = bindBodyShape(sphere, shape, scene, { friction: 0.2, restitution: 1 })
     phy_sphere.game_data = { test: "one", number: 23 }
     // phy_sphere.disablePreStep = false;
     // phy_sphere.setTargetTransform(new BABYLON.Vector3(0, 1, 4), new BABYLON.Quaternion(0, 0, 0, 0))
@@ -116,92 +135,157 @@ const createScene = async function () {
     const craftMaterial = new BABYLON.StandardMaterial("craftMaterial", scene);
     // Our built-in 'sphere' shape.
     let diameter = 2
-    const craft = BABYLON.MeshBuilder.CreateSphere("craft", { diameter: diameter, segments: 4 }, scene);
-    const cylinder = BABYLON.MeshBuilder.CreateCylinder("cylinder", { height: 2, diameterTop: 0.25, diameterBottom: 0.25, tessellation: 8 }, scene);
-    cylinder.position.set(0.70711, 0.70711, 1);
-    cylinder.rotate(new BABYLON.Vector3(1, 0, 0), Math.PI/2)
-    cylinder.material = myMaterial;
-    
-    cylinder.setParent(craft)
-    craft.material = myMaterial;
-
+    const craft = BABYLON.MeshBuilder.CreateSphere("craft", { diameter: diameter, segments: 4 }, scene); craft.material = myMaterial;
+    const craftShape = new BABYLON.PhysicsShapeSphere(new BABYLON.Vector3(0, 0, 0), diameter / 2, /*radius of the sphere*/ scene);
+    console.log(craft);
     craft.position.set(0, 10, -30);
-    const craftShape = new BABYLON.PhysicsShapeSphere(new BABYLON.Vector3(0, 0, 0), diameter/2, /*radius of the sphere*/ scene);
-    const cylinderShape = new BABYLON.PhysicsShapeCylinder(
-        new BABYLON.Vector3(0.70711, 0.70711, 2),
-        new BABYLON.Vector3(0.70711, 0.70711, 0),
-        0.125,
-        scene,
-    )
-    console.log(craft)
-    let phy_craft = bindBodyShape(craft, craftShape, scene)
-    let phy_cylinder = bindBodyShape(cylinder, cylinderShape, scene)
-    phy_craft.game_data = { test: "one", number: 23 }
+
+    let phy_craft = bindBodyShape(craft, craftShape, scene, { friction: 0.2, restitution: 1 });
+    phy_craft.game_data = { test: "one", number: 23 };
+    craftProperties.gunPositions.forEach(gunPosition => {
+        const cylinder = BABYLON.MeshBuilder.CreateCylinder("cylinder", { height: 2, diameterTop: 0.25, diameterBottom: 0.25, tessellation: 8 }, scene);
+        cylinder.material = myMaterial;
+        cylinder.setParent(craft)
+        const cylinderShape = new BABYLON.PhysicsShapeCylinder(
+            new BABYLON.Vector3(0, 0, 2), new BABYLON.Vector3(0, 0, 0), 0.125, scene);
+        let phy_cylinder = bindBodyShape(cylinder, cylinderShape, scene, { friction: 0.2, restitution: 1 });
+        let craftJoint = new BABYLON.LockConstraint(
+            gunPosition, new BABYLON.Vector3(0, 0, 0),
+            new BABYLON.Vector3(0, 0, 1), new BABYLON.Vector3(0, 1, 0), scene
+        );
+        phy_craft.addConstraint(phy_cylinder, craftJoint);
+    })
 
 
-    // cart and Pendulum Joint
-    // { x: childMesh.position.x, y: childMesh.position.y, z: childMesh.position.z },
-    // { w: 1.0, x: 0.0, y: 0.0, z: 0.0 },
-    let PendulumJoint = new BABYLON.LockConstraint(
-        cylinder.position.clone(),  //new BABYLON.Vector3(0, 0, 0),// 
-        new BABYLON.Vector3(2, 1, -1),
-        new BABYLON.Vector3(1, 0, 0),
-        new BABYLON.Vector3(0, 0, 1),
-        scene
-    );
-    // PendulumJoint = isCollisionsEnabled = false;
-    phy_craft.addConstraint(phy_cylinder, PendulumJoint);
+    phy_craft.setMotionType(BABYLON.PhysicsMotionType.STATIC)
+    setTimeout(() => {
+        phy_craft.setMotionType(BABYLON.PhysicsMotionType.DYNAMIC);
+    }, 1000)
 
-    // phy_craft.addConstraint(phy_cylinder, constraint);
+    // phy_craft.startsAsleep = true;
 
-    // new LockConstraint(
-    //     pivotA: Vector3,
-    //     pivotB: Vector3,
-    //     axisA: Vector3,
-    //     axisB: Vector3,
-    //     scene: Scene,
-    // )
-    // let camera = new BABYLON.FreeCamera("camera1", new BABYLON.Vector3(0, 10, -30), scene);
-    // let camera = new BABYLON.UniversalCamera("cam", new BABYLON.Vector3(0, 0, -30), this.scene);
-    let camera = new BABYLON.FreeCamera("cam", new BABYLON.Vector3(0, 0, -30), scene);
-    camera.setTarget(BABYLON.Vector3.Zero());// This targets the camera to scene origin
+
+
+
+    let box1 = BABYLON.Mesh.CreateBox("fixedBox1", 1, scene);
+    box1.position.x = 0;
+    const col = addMat(box1);
+
+    let box2 = BABYLON.Mesh.CreateBox("fixedBox2", 1, scene);
+    box2.position = new BABYLON.Vector3(0, 0, -2);
+    addMat(box2, col);
+
+    let joint = new BABYLON.LockConstraint(
+        new BABYLON.Vector3(0.5, 0.5, -0.5), new BABYLON.Vector3(-0.5, -0.5, 0.5), new BABYLON.Vector3(0, 1, 0), new BABYLON.Vector3(0, 1, 0), scene);
+    let agg1 = new BABYLON.PhysicsAggregate(box1, BABYLON.PhysicsShapeType.BOX, { mass: 1, restitution: 1 }, scene);
+    let agg2 = new BABYLON.PhysicsAggregate(box2, agg1.shape, { mass: 1, restitution: 1 }, scene);
+    agg1.body.addConstraint(agg2.body, joint);
+
+    // camera = new BABYLON.UniversalCamera("cam", new BABYLON.Vector3(0, 0, 0), scene);
+    camera = new BABYLON.FreeCamera("cam", new BABYLON.Vector3(0, 0, 0), scene);
+    // camera = new BABYLON.FlyCamera("cam", new BABYLON.Vector3(0, 0, 0), scene);
+    // camera.keysForward = []
+    // camera.keysBackward = []
+    // camera.keysDown = []
+    // camera.keysUp = []
+    // camera.keysLeft = []
+    // camera.keysRight = []
+    // camera.position = craft.position;
+
+    // camera = new BABYLON.Camera("camera1", new BABYLON.Vector3(0, 5, -10), scene, true);
+
+    // let camera = new BABYLON.ArcRotateCamera("camera1", -Math.PI / 2, Math.PI / 2.5, 15, new BABYLON.Vector3(0, 0, 0)); // 3rd person
+    camera.minZ = 0.5;
     camera.attachControl(canvas, true);// This attaches the camera to the canvas
-
-
-    // camera.position = craft.getAbsolutePosition()
-    camera.position = craft.position;
+    // camera.setTarget(BABYLON.Vector3.Zero());// This targets the camera to scene origin
+    // camera.position = craft.position;
     // camera.parent = craft
     // camera.setParent(craft)
+
+    let pivot = new BABYLON.TransformNode("root");
+    pivot.position = craft.position;
+    camera.parent = pivot;
+
     setupPointerLock();
 
     scene.onBeforeRenderObservable.add(() => {
+        // enable teleport
+        //body.disablePreStep = false;
+        //body.transformNode.position or setAbsolutePosition
+
         // calculate force required to keep the craft object pointing in the direction of the camera
         // console.log(camera, camera.cameraRotation)
-
         let craftPointing = new BABYLON.Vector3(0, 0, 1);
         let cameraPointing = new BABYLON.Vector3(0, 0, 1);
-        craftPointing.applyRotationQuaternionInPlace(craft.rotationQuaternion)
-        cameraPointing.applyRotationQuaternionInPlace(camera.absoluteRotation)
-        let dif = craftPointing.subtract(cameraPointing)
-        phy_craft.applyImpulse(craftPointing, dif)
-        phy_craft.applyImpulse(craftPointing.negate(), dif.negate())
+        craftPointing.applyRotationQuaternionInPlace(craft.rotationQuaternion);
+        cameraPointing.applyRotationQuaternionInPlace(camera.absoluteRotation);
+        let dif = craftPointing.subtract(cameraPointing);
+        phy_craft.applyImpulse(craftPointing, dif);
+        phy_craft.applyImpulse(craftPointing.negate(), dif.negate());
 
         // calculate the force required to keep the craft oriented right side up relative to the camera
         let craftUp = new BABYLON.Vector3(0, 1, 0);
         let cameraUp = new BABYLON.Vector3(0, 1, 0);
-        craftUp.applyRotationQuaternionInPlace(craft.rotationQuaternion)
-        cameraUp.applyRotationQuaternionInPlace(camera.absoluteRotation)
-        let difUp = craftUp.subtract(cameraUp)
-        phy_craft.applyImpulse(craftUp, difUp)
-        phy_craft.applyImpulse(craftUp.negate(), difUp.negate())
+        craftUp.applyRotationQuaternionInPlace(craft.rotationQuaternion);
+        cameraUp.applyRotationQuaternionInPlace(camera.absoluteRotation);
+        let difUp = craftUp.subtract(cameraUp);
+        phy_craft.applyImpulse(craftUp, difUp);
+        phy_craft.applyImpulse(craftUp.negate(), difUp.negate());
 
         // set angular damping to keep oscillations from building up
-        phy_craft.setAngularDamping(50);
+        phy_craft.setAngularDamping(10);
+
+        let tmpMove = new BABYLON.Vector3(0, 0, 0);
+        let userRotation = 0;
+        let controlAuthority = 0.2;
+        // if (controls.isLocked === true) {
+        if (UserInputs.moveForward) tmpMove.z += 1;
+        if (UserInputs.moveBackward) tmpMove.z -= 1;
+
+        if (UserInputs.moveRight) tmpMove.x += 0.5;
+        if (UserInputs.moveLeft) tmpMove.x -= 0.5;
+
+        if (UserInputs.moveUp) tmpMove.y += 0.5;
+        if (UserInputs.moveDown) tmpMove.y -= 0.5;
+
+        if (UserInputs.rollLeft) userRotation = 0.4;
+        if (UserInputs.rollRight) userRotation = -0.4;
+        if (UserInputs.activeDecelerate) {
+            let velocity = phy_craft.getLinearVelocity(0);
+            let deceleration = velocity.negate().normalizeFromLength(0.4); // TODO not aligned properly, causes acceleration wen looking in different direction
+            tmpMove.addInPlace(deceleration);
+            console.log(velocity, tmpMove)
+        }
+        // }
+
+
+        userRotation *= 0.1;
+        // camera.rotateOnAxis(new THREE.Vector3(0, 0, 1), userRotation)
+        pivot.rotate(craftPointing, userRotation, BABYLON.Space.WORLD);
+
+        // if (params.lockTarget) {
+        //     camera.lookAt(new THREE.Vector3(0, 0, 0));
+        // }
+
+        tmpMove.applyRotationQuaternionInPlace(craft.rotationQuaternion);
+        tmpMove.scaleInPlace(controlAuthority);
+        if (UserInputs.AnyActiveDirectionalInputs()) {
+            phy_craft.applyImpulse(tmpMove, craft.position);
+        }
 
     });
 
     return scene;
 };
+
+function addMat(mesh, col = null) {
+    mesh.material = new BABYLON.StandardMaterial("mat" + mesh.name);
+    if (!col) {
+        col = BABYLON.Color3.Random();
+    }
+    mesh.material.diffuseColor = col;
+    return col;
+}
 
 //width (x), height (y) and depth (z)
 function buildWall(name, dimensions, position, shadowGen, scene) {
@@ -211,12 +295,12 @@ function buildWall(name, dimensions, position, shadowGen, scene) {
     //     new BABYLON.Vector3(30, 1, 30),// extents: Vector3,
 
     let wall = BABYLON.MeshBuilder.CreateBox(name, { width: dimensions.x, height: dimensions.y, depth: dimensions.z }, scene);
-    var colors = wall.getVerticesData(BABYLON.VertexBuffer.ColorKind);
+    let colors = wall.getVerticesData(BABYLON.VertexBuffer.ColorKind);
     if (!colors) {
         colors = [];
-        var positions = wall.getVerticesData(BABYLON.VertexBuffer.PositionKind);
-        for (var p = 0; p < positions.length / 3; p++) {
-            // var c = BABYLON.Color3.FromHSV(Math.random() * 0.2 + 0.5, 0.75, Math.random() * 0.25 + 0.75)
+        let positions = wall.getVerticesData(BABYLON.VertexBuffer.PositionKind);
+        for (let p = 0; p < positions.length / 3; p++) {
+            // let c = BABYLON.Color3.FromHSV(Math.random() * 0.2 + 0.5, 0.75, Math.random() * 0.25 + 0.75)
             let c = hslToRgb(Math.random() * 0.3 + 0.5, 0.75, Math.random() * 0.25 + 0.75)
             colors.push(c[0], c[1], c[2], 1);
         }
@@ -235,40 +319,38 @@ function buildWall(name, dimensions, position, shadowGen, scene) {
     shadowGen.addShadowCaster(wall);
 }
 function BoxWorld(scene, position, size, shadowGen) {
-    let cent = size / 2
-    buildWall("ground" + Date.now(), new BABYLON.Vector3(size, 1, size), position, shadowGen, scene)
-    buildWall("ceiling" + Date.now(), new BABYLON.Vector3(size, 1, size), position.add(new BABYLON.Vector3(0, size, 0)), shadowGen, scene)
-    buildWall("w1" + Date.now(), new BABYLON.Vector3(1, size, size), position.add(new BABYLON.Vector3(-cent, cent, 0)), shadowGen, scene)
-    buildWall("w2" + Date.now(), new BABYLON.Vector3(1, size, size), position.add(new BABYLON.Vector3(cent, cent, 0)), shadowGen, scene)
-    buildWall("w3" + Date.now(), new BABYLON.Vector3(size, size, 1), position.add(new BABYLON.Vector3(0, cent, -cent)), shadowGen, scene)
-    buildWall("w4" + Date.now(), new BABYLON.Vector3(size, size, 1), position.add(new BABYLON.Vector3(0, cent, cent)), shadowGen, scene)
+    let cent = size / 2;
+    buildWall("ground" + Date.now(), new BABYLON.Vector3(size, 1, size), position, shadowGen, scene);
+    buildWall("ceiling" + Date.now(), new BABYLON.Vector3(size, 1, size), position.add(new BABYLON.Vector3(0, size, 0)), shadowGen, scene);
+    buildWall("w1" + Date.now(), new BABYLON.Vector3(1, size, size), position.add(new BABYLON.Vector3(-cent, cent, 0)), shadowGen, scene);
+    buildWall("w2" + Date.now(), new BABYLON.Vector3(1, size, size), position.add(new BABYLON.Vector3(cent, cent, 0)), shadowGen, scene);
+    buildWall("w3" + Date.now(), new BABYLON.Vector3(size, size, 1), position.add(new BABYLON.Vector3(0, cent, -cent)), shadowGen, scene);
+    buildWall("w4" + Date.now(), new BABYLON.Vector3(size, size, 1), position.add(new BABYLON.Vector3(0, cent, cent)), shadowGen, scene);
 };
 
-function bindBodyShape(mesh, shape, scene) {
-    mesh.material = bodyRenderingMaterial;
+function bindBodyShape(mesh, shape, scene, physicsMaterial) {
+    let mat = new BABYLON.StandardMaterial("mat", scene);
+    mesh.material = mat;
     if (mesh.getDescendants && mesh.getDescendants().length) {
         mesh.getDescendants().forEach((d) => {
-            d.material = bodyRenderingMaterial;
+            d.material = mat;
         });
     }
 
     let body = new BABYLON.PhysicsBody(mesh, BABYLON.PhysicsMotionType.DYNAMIC, false, scene);
 
+    shape.density = 2;
     shape.material = (physicsMaterial);
     body.shape = (shape);
-    body.setMassProperties({ mass: 1 });
-    // phy_sphere.setMassProperties({
-    //     mass: 1,
+    // body.setMassProperties({ mass: 1 });
     //     centerOfMass: new BABYLON.Vector3(0, 1, 0),
     //     inertia: new BABYLON.Vector3(1, 1, 1),
     //     inertiaOrientation: new BABYLON.Quaternion(0, 0, 0, 1)
-    // });
     return body;
 };
 
-function instancesBody(scene, position, shadowGen) {
-    let box = BABYLON.MeshBuilder.CreateBox("root", { size: 1 });
-    shadowGen.addShadowCaster(box);
+function instancesBody(scene, position, shadowGen, mesh, physicsShape) {
+    shadowGen.addShadowCaster(mesh);
     let numPerSide = 2,
         size = 2,
         ofst = 2;
@@ -316,18 +398,10 @@ function instancesBody(scene, position, shadowGen) {
     }
 
     // Set matrix buffer as non-static
-    box.thinInstanceSetBuffer("matrix", matricesData, 16, false);
-    box.thinInstanceSetBuffer("color", colorsData, 4);
-
-    let boxShape = new BABYLON.PhysicsShapeBox(
-        new BABYLON.Vector3(0, 0, 0),
-        BABYLON.Quaternion.Identity(),
-        new BABYLON.Vector3(1, 1, 1),
-        scene
-    );
-
-    bindBodyShape(box, boxShape, scene);
-    return box;
+    mesh.thinInstanceSetBuffer("matrix", matricesData, 16, false);
+    mesh.thinInstanceSetBuffer("color", colorsData, 4);
+    bindBodyShape(mesh, physicsShape, scene, { friction: 0.2, restitution: 1 });
+    return mesh;
 };
 
 function hslToRgb(h, s, l) {
@@ -356,26 +430,33 @@ function hueToRgb(p, q, t) {
 }
 
 
-
-var player;
-
+const _euler = new BABYLON.Vector3(0, 0, 0);
 function mouseMove(e) {
-    deltaTime = engine.getDeltaTime();
-    const mouseSensitivity = 0.0003;
+    let player;
+    let deltaTime = engine.getDeltaTime();
+    const mouseSensitivity = 1;
 
-    let movementX = e.movementX ||
-        e.mozMovementX ||
-        e.webkitMovementX ||
-        0;
 
-    let movementY = e.movementY ||
-        e.mozMovementY ||
-        e.webkitMovementY ||
-        0;
 
-    console.log(movementY * deltaTime * 0.001, movementX * deltaTime * 0.001)
     // player.rotation.x += movementY * deltaTime * 0.001;
     // player.rotation.y -= movementX * deltaTime * 0.001;
+
+    const movementX = e.movementX || e.mozMovementX || e.webkitMovementX || 0;
+    const movementY = e.movementY || e.mozMovementY || e.webkitMovementY || 0;
+    
+    // console.log(movementY * deltaTime * 0.001, movementX * deltaTime * 0.001)
+
+    let cameraPointing = new BABYLON.Vector3(0, 0, 1);
+    cameraPointing.applyRotationQuaternionInPlace(camera.absoluteRotation);
+
+    // let euler = camera.absoluteRotation.toEulerAngles(); 
+    cameraPointing.x += movementX * 0.002 * mouseSensitivity;
+    cameraPointing.y -= movementY * 0.002 * mouseSensitivity;
+    // _euler.x = Math.max(_PI_2 - scope.maxPolarAngle, Math.min(_PI_2 - scope.minPolarAngle, _euler.x));
+
+    console.log(cameraPointing)
+    camera.setTarget(camera.position.add(cameraPointing));
+    // camera.quaternion.setFromEuler(_euler);
 }
 
 function setupPointerLock() {
@@ -390,8 +471,7 @@ function setupPointerLock() {
         canvas.requestPointerLock =
             canvas.requestPointerLock ||
             canvas.mozRequestPointerLock ||
-            canvas.webkitRequestPointerLock
-            ;
+            canvas.webkitRequestPointerLock;
 
         // Ask the browser to lock the pointer)
         canvas.requestPointerLock();

@@ -19,6 +19,9 @@ router.get('/game', (ctx, next) => sendFile(ctx, '\\gme\\game.html'));
 router.get(/\/[^\/]+\.[\w]+/, async (ctx, next) => {
     try {
         index = fs.readFileSync(__dirname + ctx.url); //   +"\\.."+
+        if (ctx.url.endsWith(".js")) {
+            ctx.response.type = 'text/javascript';
+        }
         ctx.response.body = index;
     } catch (error) {
         ctx.status = error.statusCode || error.status || 500;
