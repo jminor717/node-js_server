@@ -141,11 +141,17 @@ const createScene = async function () {
     craft.position.set(0, 10, -30);
 
     let phy_craft = bindBodyShape(craft, craftShape, scene, { friction: 0.2, restitution: 1 });
+    let physicsParts = [];
     phy_craft.game_data = { test: "one", number: 23 };
+    // phy_craft.setMotionType(BABYLON.PhysicsMotionType.ANIMATED)// DYNAMIC STATIC
+    physicsParts.push(phy_craft)
+    const warmupTime = 100;
     craftProperties.gunPositions.forEach(gunPosition => {
         const cylinder = BABYLON.MeshBuilder.CreateCylinder("cylinder", { height: 2, diameterTop: 0.25, diameterBottom: 0.25, tessellation: 8 }, scene);
         cylinder.material = myMaterial;
-        cylinder.setParent(craft)
+        cylinder.setParent(craft);
+        cylinder.rotate(new BABYLON.Vector3(1, 0, 0), Math.PI / 2)
+        cylinder.position = gunPosition//craft.position.add(gunPosition)
         const cylinderShape = new BABYLON.PhysicsShapeCylinder(
             new BABYLON.Vector3(0, 0, 2), new BABYLON.Vector3(0, 0, 0), 0.125, scene);
         let phy_cylinder = bindBodyShape(cylinder, cylinderShape, scene, { friction: 0.2, restitution: 1 });
@@ -153,18 +159,30 @@ const createScene = async function () {
             gunPosition, new BABYLON.Vector3(0, 0, 0),
             new BABYLON.Vector3(0, 0, 1), new BABYLON.Vector3(0, 1, 0), scene
         );
+
+        phy_cylinder.setLinearDamping(warmupTime)
+        phy_cylinder.setAngularDamping(warmupTime)
+        physicsParts.push(phy_cylinder);
         phy_craft.addConstraint(phy_cylinder, craftJoint);
     })
 
+    phy_craft.setLinearDamping(warmupTime)
+    phy_craft.setAngularDamping(warmupTime)
+    let run = false;
+    let i = warmupTime;
 
-    phy_craft.setMotionType(BABYLON.PhysicsMotionType.STATIC)
-    setTimeout(() => {
-        phy_craft.setMotionType(BABYLON.PhysicsMotionType.DYNAMIC);
-    }, 1000)
-
-    // phy_craft.startsAsleep = true;
-
-
+    let warmUp = setInterval(() => {
+        if (i<=0) {
+            run = true;
+            clearInterval(warmUp)
+            return;
+        }
+        for (const body of physicsParts) {
+            body.setLinearDamping(i)
+            body.setAngularDamping(i)
+        }
+        i--
+    }, 10);
 
 
     let box1 = BABYLON.Mesh.CreateBox("fixedBox1", 1, scene);
@@ -181,34 +199,27 @@ const createScene = async function () {
     let agg2 = new BABYLON.PhysicsAggregate(box2, agg1.shape, { mass: 1, restitution: 1 }, scene);
     agg1.body.addConstraint(agg2.body, joint);
 
-    // camera = new BABYLON.UniversalCamera("cam", new BABYLON.Vector3(0, 0, 0), scene);
-    camera = new BABYLON.FreeCamera("cam", new BABYLON.Vector3(0, 0, 0), scene);
-    // camera = new BABYLON.FlyCamera("cam", new BABYLON.Vector3(0, 0, 0), scene);
-    // camera.keysForward = []
-    // camera.keysBackward = []
-    // camera.keysDown = []
-    // camera.keysUp = []
-    // camera.keysLeft = []
-    // camera.keysRight = []
-    // camera.position = craft.position;
-
-    // camera = new BABYLON.Camera("camera1", new BABYLON.Vector3(0, 5, -10), scene, true);
-
     // let camera = new BABYLON.ArcRotateCamera("camera1", -Math.PI / 2, Math.PI / 2.5, 15, new BABYLON.Vector3(0, 0, 0)); // 3rd person
+    camera = new BABYLON.FlyCamera("cam", new BABYLON.Vector3(0, 0, 0), scene); //FreeCamera, UniversalCamera
+    camera.keysForward = []
+    camera.keysBackward = []
+    camera.keysDown = []
+    camera.keysUp = []
+    camera.keysLeft = []
+    camera.keysRight = []
+    camera.position = craft.position;
+    // camera.position = new BABYLON.Vector3(0, 15, -30);
+    // camera.setTarget(craft.position);
+
     camera.minZ = 0.5;
     camera.attachControl(canvas, true);// This attaches the camera to the canvas
-    // camera.setTarget(BABYLON.Vector3.Zero());// This targets the camera to scene origin
-    // camera.position = craft.position;
-    // camera.parent = craft
-    // camera.setParent(craft)
-
-    let pivot = new BABYLON.TransformNode("root");
-    pivot.position = craft.position;
-    camera.parent = pivot;
 
     setupPointerLock();
 
     scene.onBeforeRenderObservable.add(() => {
+        if (!run) {
+            return;
+        }
         // enable teleport
         //body.disablePreStep = false;
         //body.transformNode.position or setAbsolutePosition
@@ -261,11 +272,6 @@ const createScene = async function () {
 
         userRotation *= 0.1;
         // camera.rotateOnAxis(new THREE.Vector3(0, 0, 1), userRotation)
-        pivot.rotate(craftPointing, userRotation, BABYLON.Space.WORLD);
-
-        // if (params.lockTarget) {
-        //     camera.lookAt(new THREE.Vector3(0, 0, 0));
-        // }
 
         tmpMove.applyRotationQuaternionInPlace(craft.rotationQuaternion);
         tmpMove.scaleInPlace(controlAuthority);
