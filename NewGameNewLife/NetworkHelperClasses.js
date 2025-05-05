@@ -223,7 +223,7 @@ class PeerJsNetwork {
     JoinServer(serverName) {
         this._sendPeerIdUpdate({ Action: "JoinServer", MyId: this.MY_ID, ServerName: serverName }).then(data => {
             if (!data.Response.error) {
-                data.Servers
+                console.log(data, data.Response, data.Servers)
                 this.ExpectedInitialPeers = data.Servers[serverName].Players.concat([data.Servers[serverName].Host]).filter((x) => x.length > 3);
                 console.log("attempting contact with", this.ExpectedInitialPeers);
                 if (!this.ExpectedInitialPeers.includes(this.MY_ID)) {

@@ -6,6 +6,8 @@ import "./havok.js";
 
 // const RAPIER_PATH = 'https://cdn.skypack.dev/@dimforge/rapier3d-compat@0.11.2';
 
+//https://doc.babylonjs.com/typedoc/classes/BABYLON.HavokPlugin#applyimpulse
+
 const frameRate = 60;
 
 const _scale = new Vector3(1, 1, 1);
@@ -175,6 +177,8 @@ async function _HavocPhysics(gravity) {
 
     function applyImpulse(mesh, velocity, index = 0, physicsBody = null) {
         let body = physicsBody ?? getPhysicsBody(mesh, index);
+        havok.HP_Body_ApplyImpulse(body, [velocity.x, velocity.y, velocity.z], [0,0,0])
+
         // body.applyImpulse(velocity, true);
     }
 

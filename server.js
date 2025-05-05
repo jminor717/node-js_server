@@ -385,6 +385,7 @@ app.post("/PeerIdUpdate", function (req, res) {
         response.error = "Player Id Not Created"
     }
 
+    console.log({ Servers: ServerTracker.Servers, Response: response })
     res.send({ Servers: ServerTracker.Servers, Response: response });
 });
 

@@ -199,6 +199,8 @@ async function init() {
 
     stats = new Stats();
     document.body.appendChild(stats.dom);
+
+    let tmpMove = new THREE.Vector3(1, 0, 0);
 }
 
 
@@ -328,18 +330,18 @@ function createCraftRotationForces(startingVector, physicsCraft){
 }
 
 function animate() {
-    let tmpmove = new THREE.Vector3(0, 0, 0);
+    let tmpMove = new THREE.Vector3(0, 0, 0);
     let userRotation = 0;
     let controlAuthority = params.controlAuthority;
     if (controls.isLocked === true) {
-        if (UserInputs.moveForward) tmpmove.z -= 1;
-        if (UserInputs.moveBackward) tmpmove.z += 1;
+        if (UserInputs.moveForward) tmpMove.z -= 1;
+        if (UserInputs.moveBackward) tmpMove.z += 1;
 
-        if (UserInputs.moveRight) tmpmove.x += 0.5;
-        if (UserInputs.moveLeft) tmpmove.x -= 0.5;
+        if (UserInputs.moveRight) tmpMove.x += 0.5;
+        if (UserInputs.moveLeft) tmpMove.x -= 0.5;
 
-        if (UserInputs.moveUp) tmpmove.y += 0.5;
-        if (UserInputs.moveDown) tmpmove.y -= 0.5;
+        if (UserInputs.moveUp) tmpMove.y += 0.5;
+        if (UserInputs.moveDown) tmpMove.y -= 0.5;
 
         if (UserInputs.rollLeft) userRotation = 0.4;
         if (UserInputs.rollRight) userRotation = -0.4;
@@ -357,10 +359,13 @@ function animate() {
         camera.lookAt(new THREE.Vector3(0, 0, 0));
     }
 
-    tmpmove.applyQuaternion(craftView.quaternion);
-    tmpmove.multiplyScalar(controlAuthority);
+    tmpMove.applyQuaternion(craftView.quaternion);
+    tmpMove.multiplyScalar(controlAuthority);
 
+    // console.log(tmpMove)
     // TODO: havok
+    physics.applyImpulse(craftMesh, tmpMove);
+
     // let physicsCraft = physics.getPhysicsBody(craftMesh)
     // // physics.havok.HP_Body_ApplyImpulse(physicsCraft, [0,0,0], [0,0,0])
     // physicsCraft.applyImpulse(tmpmove, true)
