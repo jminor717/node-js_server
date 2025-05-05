@@ -22,8 +22,12 @@ class RTCPeer {
         this.hasRemote = false;
     }
 
+    // https://webrtc.github.io/samples/src/content/datachannel/channel/
+    // docs
     FindIce() {
         this.localConnection = new RTCPeerConnection(servers);
+        this.localConnection.addEventListener('datachannel', (event) => { console.log("data chan", event) });
+
         console.log('Created local peer connection object localConnection', this.RemoteId);
 
         this.sendChannel = this.localConnection.createDataChannel('sendDataChannel');
@@ -42,6 +46,8 @@ class RTCPeer {
         }
 
         this.localConnection.createOffer().then(gotDescription, this.onCreateSessionDescriptionError);
+        this.localConnection.onnegotiationneeded = (event) => { console.log("TTTTTTTTTTT", event) }
+
     }
 
 
@@ -54,6 +60,11 @@ class RTCPeer {
         // }
         this.localConnection.setRemoteDescription(desc);
         this.flushIce();
+        setTimeout(() => {
+            this.sendChannel = this.localConnection.createDataChannel('sendDataChannel2');
+            this.sendChannel.onopen = this.onSendChannelStateChange;
+            this.sendChannel.onclose = this.onSendChannelStateChange;
+        },1000)
         // this.localConnection.createAnswer().then(
         //     gotDescription,
         //     this.onCreateSessionDescriptionError
@@ -63,6 +74,7 @@ class RTCPeer {
     AcceptRemote(offer) {
         this.localConnection = new RTCPeerConnection(servers);
         console.log('Created _remote_ peer connection object localConnection', this.RemoteId);
+        this.localConnection.addEventListener('datachannel', (event) => { console.log("data chan", event) });
 
         // this.sendChannel = this.localConnection.createDataChannel('sendDataChannel');
 
@@ -90,6 +102,8 @@ class RTCPeer {
         );
 
         this.localConnection.ondatachannel = receiveChannelCallback;
+
+        this.localConnection.onnegotiationneeded =(event) => {console.log("________",event)}
     }
 
     receiveChannelCallback(event) {
