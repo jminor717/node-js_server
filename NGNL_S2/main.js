@@ -70,6 +70,10 @@ upgrades:
     
     Rest Mass manipulation field: add ability to increase craft gravity, pulling objects towards the craft.
         -> black hole cannon: shoot out a black hole that pules in objects then after a certain time or when releasing the trigger blows them all away
+        -> turning assist: when moving create a mass above the craft that pulls the craft in a tight circle allowing for quicker direction changes
+            this mass can be toggled on an off quickly to reduce its strength and will stay in place until it is left off for more than one second
+            also attracts nearby players and objects
+    
 */
 
 let AuthorityLevels = [
