@@ -1,3 +1,4 @@
+"use strict";
 class UserInputState {
     constructor(roleRate) {
         this.moveUp = false;
