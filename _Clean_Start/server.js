@@ -191,7 +191,7 @@ wss.on('connection', function connection(ws) {
     });
     ws.on('message', function message(da, isBinary) {
         let data = JSON.parse(da)
-        console.log(data)
+        // console.log(data)
         switch (data.TYPE) {
             case SendMessages.INIT: ws.ID = data.MyId; break;
             case "ActiveServers": ws.ID = data.MyId; break;

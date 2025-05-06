@@ -14,7 +14,7 @@ class RTCPeer {
     constructor(myId, remoteId, server) {
         this.MyId = myId;
         this.RemoteId = remoteId;
-        console.log("webRtc for: ", this.MyId, " remote: ", this.RemoteId)
+        // console.log("webRtc for: ", this.MyId, " remote: ", this.RemoteId)
         this.Server = server;
         this.localConnection;
         this.sendChannel;
@@ -22,23 +22,28 @@ class RTCPeer {
         this.hasRemote = false;
     }
 
-    // https://webrtc.github.io/samples/src/content/datachannel/channel/
-    // docs
+    onReceiveMessageCallback(event) {
+        console.log('Received Message', event);
+        //todo receive Data   event.data
+    }
+
+
+
+
+    /**
+     * setup by first client
+     */
     FindIce() {
         this.localConnection = new RTCPeerConnection(servers);
-        this.localConnection.addEventListener('datachannel', (event) => { console.log("data chan", event) });
-
-        console.log('Created local peer connection object localConnection', this.RemoteId);
+        // this.localConnection.addEventListener('datachannel', (event) => { console.log("data chan", event) });
+        console.log(this.MyId, 'Created local peer connection object localConnection', this.RemoteId);
 
         this.sendChannel = this.localConnection.createDataChannel('sendDataChannel');
-        // console.log('Created send data channel');
+        this.sendChannel.onopen = (event) => this.onSendChannelStateChange(event);
+        this.sendChannel.onclose = (event) => this.onSendChannelStateChange(event);
+        this.sendChannel.onmessage = this.onReceiveMessageCallback;
 
-        this.localConnection.onicecandidate = e => {
-            // console.log("&&&", this.RemoteId, e.candidate)
-            this.Server.relayCandidate(this.RemoteId, e.candidate)
-            // remote.addIceCandidate(event.candidate)
-            // onIceCandidate(this.localConnection, e);
-        };
+        this.localConnection.onicecandidate = e => { this.Server.relayCandidate(this.RemoteId, e.candidate) };
 
         const gotDescription = (desc) => {
             this.localConnection.setLocalDescription(desc);
@@ -46,48 +51,30 @@ class RTCPeer {
         }
 
         this.localConnection.createOffer().then(gotDescription, this.onCreateSessionDescriptionError);
-        this.localConnection.onnegotiationneeded = (event) => { console.log("TTTTTTTTTTT", event) }
 
     }
 
-
-
+    /**
+     * 
+     * @param {*} desc 
+     */
     RemoteOffer(desc) {
-        console.log("got desc ", desc)
-
-        // const gotDescription = (desc) => {
-        //     this.Server.relayOffer(this.RemoteId, desc)
-        // }
+        // console.log("got desc ", desc)
         this.localConnection.setRemoteDescription(desc);
         this.flushIce();
-        setTimeout(() => {
-            this.sendChannel = this.localConnection.createDataChannel('sendDataChannel2');
-            this.sendChannel.onopen = this.onSendChannelStateChange;
-            this.sendChannel.onclose = this.onSendChannelStateChange;
-        },1000)
-        // this.localConnection.createAnswer().then(
-        //     gotDescription,
-        //     this.onCreateSessionDescriptionError
-        // );
     }
 
+    /**
+     * setup by second client using offer created in setup of first client
+     */
     AcceptRemote(offer) {
         this.localConnection = new RTCPeerConnection(servers);
-        console.log('Created _remote_ peer connection object localConnection', this.RemoteId);
-        this.localConnection.addEventListener('datachannel', (event) => { console.log("data chan", event) });
-
-        // this.sendChannel = this.localConnection.createDataChannel('sendDataChannel');
+        console.log(this.MyId, 'Created _remote_ peer connection object localConnection', this.RemoteId);
+        // this.localConnection.addEventListener('datachannel', (event) => { console.log("data chan", event) });
 
         this.localConnection.onicecandidate = e => {
-            // console.log("&&&", this.RemoteId, e.candidate)
             this.Server.relayCandidate(this.RemoteId, e.candidate)
-            // remote.addIceCandidate(event.candidate)
-            // onIceCandidate(this.localConnection, e);
         };
-        // this.sendChannel.onopen = this.onSendChannelStateChange;
-        // this.sendChannel.onclose = this.onSendChannelStateChange;
-
-
 
         const gotDescription = (desc) => {
             this.localConnection.setLocalDescription(desc);
@@ -96,163 +83,46 @@ class RTCPeer {
         }
 
         this.localConnection.setRemoteDescription(offer);
-        this.localConnection.createAnswer().then(
-            gotDescription,
-            this.onCreateSessionDescriptionError
-        );
+        this.localConnection.createAnswer().then(gotDescription, this.onCreateSessionDescriptionError);
 
-        this.localConnection.ondatachannel = receiveChannelCallback;
-
-        this.localConnection.onnegotiationneeded =(event) => {console.log("________",event)}
+        this.localConnection.ondatachannel = (event) => this.receiveChannelCallback(event);
     }
 
     receiveChannelCallback(event) {
-        console.log('Receive Channel Callback');
+        // console.log('Receive Channel Callback', event);
         this.sendChannel = event.channel;
         this.sendChannel.onmessage = this.onReceiveMessageCallback;
-        this.sendChannel.onopen = this.onSendChannelStateChange;
-        this.sendChannel.onclose = this.onSendChannelStateChange;
-    }
-
-    onReceiveMessageCallback(event) {
-        console.log('Received Message', event);
-        //todo receive Data   event.data
+        this.sendChannel.onopen = (event) => this.onSendChannelStateChange(event);
+        this.sendChannel.onclose = (event) => this.onSendChannelStateChange(event);
     }
 
     addRemoteICE(candidate) {
-        if (this.hasRemote) {
-            this.addIceInternal(candidate);
-        }
-        else{
-            this.candidates.push(candidate)
-        }
+        if (this.hasRemote) { this.addIceInternal(candidate); }
+        else { this.candidates.push(candidate); }
     }
 
-    flushIce(){
+    flushIce() {
         this.hasRemote = true;
-        for (const can of this.candidates) {
-            this.addIceInternal(can);
-        }
+        for (const can of this.candidates) { this.addIceInternal(can); }
         this.candidates = [];
     }
 
-    addIceInternal(candidate){
-        this.localConnection.addIceCandidate(candidate)
-            .then(
-                this.onAddIceCandidateSuccess,
-                this.onAddIceCandidateError
-            );
-        console.log(`ICE candidate: ${candidate ? candidate.candidate : '(null)'}`);
+    addIceInternal(candidate) {
+        this.localConnection.addIceCandidate(candidate).then(this.onAddIceCandidateSuccess, this.onAddIceCandidateError);
+        // console.log(`ICE candidate: ${candidate ? candidate.candidate : '(null)'}`);
     }
 
-    onAddIceCandidateSuccess() {
-        console.log('AddIceCandidate success.');
-    }
+    onAddIceCandidateSuccess() { }//console.log('AddIceCandidate success.'); }
+    onAddIceCandidateError(error) { console.log(`Failed to add Ice Candidate: ${error.toString()}`); }
+    onCreateSessionDescriptionError(error) { console.log('Failed to create session description: ' + error.toString()); }
 
-    onAddIceCandidateError(error) {
-        console.log(`Failed to add Ice Candidate: ${error.toString()}`);
-    }
-
-    onCreateSessionDescriptionError(error) {
-        console.log('Failed to create session description: ' + error.toString());
-    }
-
-    onSendChannelStateChange() {
+    onSendChannelStateChange(ev) {
         const readyState = this.sendChannel.readyState;
-        console.log('Send channel state is: ' + readyState);
+        console.log('Send channel state is: ' + readyState, ev);
+        if (readyState == "open") {
+            this.sendChannel.send("oh hi")
+        }
     }
 }
 
 export { RTCPeer };
-
-// start
-function createConnection() {
-    window.remoteConnection = remoteConnection = new RTCPeerConnection(servers);
-    console.log('Created remote peer connection object remoteConnection');
-
-    remoteConnection.onicecandidate = e => {
-        onIceCandidate(remoteConnection, e);
-    };
-    remoteConnection.ondatachannel = receiveChannelCallback;
-
-
-}
-
-
-function sendData(data) {
-    sendChannel.send(data);
-    console.log('Sent Data: ' + data);
-}
-
-function closeDataChannels() {
-    console.log('Closing data channels');
-    sendChannel.close();
-    console.log('Closed data channel with label: ' + sendChannel.label);
-    receiveChannel.close();
-    console.log('Closed data channel with label: ' + receiveChannel.label);
-    localConnection.close();
-    remoteConnection.close();
-    localConnection = null;
-    remoteConnection = null;
-    console.log('Closed peer connections');
-}
-
-function gotDescription1(desc) {
-    localConnection.setLocalDescription(desc);
-    console.log(`Offer from localConnection\n${desc.sdp}`);
-    remoteConnection.setRemoteDescription(desc);
-    remoteConnection.createAnswer().then(
-        gotDescription2,
-        onCreateSessionDescriptionError
-    );
-}
-
-function gotDescription2(desc) {
-    remoteConnection.setLocalDescription(desc);
-    console.log(`Answer from remoteConnection\n${desc.sdp}`);
-    localConnection.setRemoteDescription(desc);
-}
-
-function getOtherPc(pc) {
-    return (pc === localConnection) ? remoteConnection : localConnection;
-}
-
-function getName(pc) {
-    return (pc === localConnection) ? 'localPeerConnection' : 'remotePeerConnection';
-}
-
-function onIceCandidate(pc, event) {
-    getOtherPc(pc)
-        .addIceCandidate(event.candidate)
-        .then(
-            onAddIceCandidateSuccess,
-            onAddIceCandidateError
-        );
-    console.log(`${getName(pc)} ICE candidate: ${event.candidate ? event.candidate.candidate : '(null)'}`);
-}
-
-function onAddIceCandidateSuccess() {
-    console.log('AddIceCandidate success.');
-}
-
-function onAddIceCandidateError(error) {
-    console.log(`Failed to add Ice Candidate: ${error.toString()}`);
-}
-
-function receiveChannelCallback(event) {
-    console.log('Receive Channel Callback');
-    receiveChannel = event.channel;
-    receiveChannel.onmessage = onReceiveMessageCallback;
-    receiveChannel.onopen = onReceiveChannelStateChange;
-    receiveChannel.onclose = onReceiveChannelStateChange;
-}
-
-function onReceiveMessageCallback(event) {
-    console.log('Received Message');
-    //todo receive Data   event.data
-}
-
-function onReceiveChannelStateChange() {
-    const readyState = receiveChannel.readyState;
-    console.log(`Receive channel state is: ${readyState}`);
-}

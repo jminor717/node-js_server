@@ -27,7 +27,6 @@ class ServerNetwork {
         this.socket = new WebSocket("ws://localhost:8080"); // wss://
         this.isReady = new Promise((resolve, reject) => {
             this.socket.onopen = (event) => {
-                console.log(event)
                 this.socket.send(JSON.stringify({ MyId: this.MyId, TYPE: SendMessages.INIT }));
                 resolve();
             };
@@ -84,7 +83,6 @@ class ServerNetwork {
         this.socket.send(JSON.stringify(request))
         return new Promise((resolve, reject) => {
             this.activeResponse = (data) => {
-                console.log(data)
                 if (data.Host && data.Host != this.MyId) {
                     this.newConnection(data.Host);
                 }
@@ -106,7 +104,7 @@ class ServerNetwork {
     }
 
     relayOffer(toId, offer) {
-        console.log("offer to ", toId)
+        // console.log("offer to ", toId)
         let request = { MyId: this.MyId, TYPE: SendMessages.ICE_OFFER, TO: toId, data: offer };
         this.socket.send(JSON.stringify(request))
     }
@@ -118,7 +116,7 @@ class ServerNetwork {
     }
 
     receiveOffer(fromId, offer) {
-        console.log("offer from ", fromId, offer)
+        // console.log("offer from ", fromId, offer)
         if (!this.Connections[fromId]) {
             const network = new RTCPeer(this.MyId, fromId, this)
             network.AcceptRemote(offer);
