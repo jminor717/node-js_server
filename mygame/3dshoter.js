@@ -1,7 +1,6 @@
 //import { strict } from "assert";
 
 
-
 Physijs.scripts.worker = 'Physijs/physijs_worker.js';
 Physijs.scripts.ammo = 'Physijs/examples/js/ammo2.js';
 var camera = {}, scene = {}, renderer = {}, controls = {};
@@ -70,7 +69,7 @@ function staticinit(objs) {
     "use strict";
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 1, 1000);
     scene.background = new THREE.Color(0xffffff);
-    scene.fog = new THREE.Fog(0xffffff, 0, 300);
+    scene.fog = new THREE.Fog(0xffffff, 0, 500);
     var light = new THREE.HemisphereLight(0xeeeeff, 0x777788, 0.75);
     light.position.set(0.5, 1, 0.75);
     scene.add(light);
@@ -395,9 +394,9 @@ function onWindowResize() {
 function onDocumentmousedown(event) {
     "use strict";
     //console.log(event.button,event.button,event.timeStamp)
-    if (event.button == 0) { single(400000, 400, event, 500) }
+    if (event.button == 0) { single(400000, 400, event, 400) }
     if (event.button == 1) { grenade(250000, 50, event, 150) }
-    if (event.button == 2) { shotgun(400000, 200, 10, event, 350) }
+    if (event.button == 2) { shotgun(400000, 200, 10, event, 250) }
     //for (var obj in scene.children) {
     // console.log(scene.children[obj].uuid)
     // }
@@ -554,7 +553,7 @@ function makeprojectile(position, velocity, mass, time, geomitty, material, radi
         return tmp;
     }
 
-
+console.log("it no goo")
     let box = new Physijs.SphereMesh(geomitty, material);
     box.dealDamage = true;
     box.castShadow = true;
