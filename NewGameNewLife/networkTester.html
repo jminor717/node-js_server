@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <title>Peerjs Network Tester</title>
+    <meta charset="utf-8">
+    <style>
+
+    </style>
+</head>
+
+<body>
+
+
+
+    <!-- Import maps polyfill -->
+    <!-- Remove this when import maps will be widely supported -->
+    <script async src="https://unpkg.com/es-module-shims@1.3.6/dist/es-module-shims.js"></script>
+    <script type="importmap">
+    			{
+    				"imports": {
+    					"three": "../three.js/build/three.module.js",
+    					"three/addons/": "../three.js/examples/jsm/",
+    					"components/": "./NewGameNewLife/"
+    				}
+    			}
+    		</script>
+    <script type="module" src="NewGameNewLife/networkTester.js"> </script>
+    <script src="/node_modules/peerjs/dist/peerjs.min.js" type="application/javascript"></script>
+    <!-- <script src="https://unpkg.com/peerjs@1.5.0/dist/peerjs.min.js"></script> -->
+    <div id="defalut"></div>
+
+    <button onclick="initConnection()">init Connection</button>
+    <button onclick="forceServer()">Force Host</button>
+    <br/><br />
+    <input name="ServerName" type="text" maxlength="128" id="ServerName"  />
+    <br/>
+    <button onclick="createServer()">Create Server</button>
+    <button onclick="joinServer()">Join Server</button>
+    <button onclick="leaveServer()">Leave Server</button>
+    <br /><br />
+    <div id="Console__"></div>
+</body>
+
+</html>

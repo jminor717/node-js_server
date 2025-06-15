@@ -1,3 +1,8 @@
 {
-    "editor.renderWhitespace": "all"
+    "editor.renderWhitespace": "all",
+    "cSpell.words": [
+        "Collisiontarget",
+        "havok",
+        "peerjs"
+    ]
 }

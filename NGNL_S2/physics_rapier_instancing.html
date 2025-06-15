@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<title>three.js physics - rapier3d instancing</title>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+	<link type="text/css" rel="stylesheet" href="../three.js/examples/main.css">
+</head>
+
+<body>
+
+	<div id="info">
+		<a href="https://threejs.org" target="_blank" rel="noopener">three.js</a> physics - rapier3d instancing
+	</div>
+
+	<script type="importmap">
+			{
+				"imports": {
+					"three": "../three.js/build/three.module.js",
+					"three/addons/": "../three.js/examples/jsm/"
+				}
+			}
+		</script>
+
+	<script type="module">
+
+		import * as THREE from 'three';
+		import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+		// import { RapierPhysics } from 'three/addons/physics/RapierPhysics.js';
+		import { RapierPhysics } from '../../NGNL_S2/RapierPhysics.js';
+		import Stats from 'three/addons/libs/stats.module.js';
+
+		let camera, scene, renderer, stats;
+		let physics, position;
+
+		let boxes, spheres;
+		const mouseCoords = new THREE.Vector2();
+		const raycaster = new THREE.Raycaster();
+		const ballMaterial = new THREE.MeshPhongMaterial({ color: 0x202020 });
+		const pos = new THREE.Vector3();
+		const quat = new THREE.Quaternion();
+
+		init();
+
+		const color = new THREE.Color();
+		function createColoredWall(offset, rotation) {
+			const vertex = new THREE.Vector3();
+
+			let floorGeometry = new THREE.PlaneGeometry(20, 20, 60, 60);
+			floorGeometry.rotateX(- Math.PI / 2);
+
+			// vertex displacement
+			let position = floorGeometry.attributes.position;
+			for (let i = 0, l = position.count; i < l; i++) {
+				vertex.fromBufferAttribute(position, i);
+				vertex.x += Math.random() * 0.2 - 0.1;
+				vertex.y += Math.random() * 0.02;
+				vertex.z += Math.random() * 0.2 - 0.1;
+				position.setXYZ(i, vertex.x, vertex.y, vertex.z);
+			}
+
+			floorGeometry = floorGeometry.toNonIndexed(); // ensure each face has unique vertices
+			position = floorGeometry.attributes.position;
+			const colorsFloor = [];
+
+			for (let i = 0, l = position.count; i < l; i++) {
+				color.setHSL(Math.random() * 0.3 + 0.5, 0.75, Math.random() * 0.25 + 0.75);
+				colorsFloor.push(color.r, color.g, color.b);
+			}
+			floorGeometry.rotateX(Math.PI / 2);
+
+			if (rotation.x)
+				floorGeometry.rotateX(rotation.x);
+			if (rotation.y)
+				floorGeometry.rotateY(rotation.y);
+			if (rotation.z)
+				floorGeometry.rotateZ(rotation.z);
+
+			floorGeometry.setAttribute('color', new THREE.Float32BufferAttribute(colorsFloor, 3));
+			// const floorMaterial = new THREE.MeshBasicMaterial({ vertexColors: true });
+			const floorMaterial = new THREE.MeshLambertMaterial({ vertexColors: true });
+			const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+			floor.position.set(offset.x, offset.y, offset.z);
+			floor.receiveShadow = true;
+			scene.add(floor);
+			// physics.addMesh(floor);
+			// AimAbleObjects.push(floor);
+		}
+
+		function CreateWall(boxSize, offset) {
+			const physicalFloor = new THREE.Mesh(
+				new THREE.BoxGeometry(boxSize.x, boxSize.y, boxSize.z),
+				new THREE.MeshLambertMaterial({ color: 0x999999, visible: false }) //{ color: 0x8f1111 }
+			);
+			if (offset.x)
+				physicalFloor.position.x = offset.x;
+			if (offset.y)
+				physicalFloor.position.y = offset.y;
+			if (offset.z)
+				physicalFloor.position.z = offset.z;
+			//physicalFloor.receiveShadow = true;
+			physicalFloor.userData = { isWall: true };
+			scene.add(physicalFloor);
+			physics.addMesh(physicalFloor, 0, 0);
+		}
+
+		function initInput() {
+
+			window.addEventListener('pointerdown', function (event) {
+
+				mouseCoords.set(
+					(event.clientX / window.innerWidth) * 2 - 1,
+					- (event.clientY / window.innerHeight) * 2 + 1
+				);
+
+				raycaster.setFromCamera(mouseCoords, camera);
+
+				// Creates a ball and throws it
+				const ballMass = 35;
+				const ballRadius = 0.01;
+
+				const ball = new THREE.Mesh(new THREE.SphereGeometry(ballRadius, 14, 10), ballMaterial);
+				ball.castShadow = true;
+				ball.receiveShadow = true;
+				scene.add(ball);
+				physics.addMesh(ball, 10, 1);
+
+				// const ballShape = new Ammo.btSphereShape(ballRadius);
+				pos.copy(raycaster.ray.direction);
+				pos.add(raycaster.ray.origin);
+				physics.setMeshPosition(ball, pos);
+
+				pos.copy(raycaster.ray.direction);
+				pos.multiplyScalar(3);
+
+				physics.setMeshVelocity(ball, pos);
+				// const ballBody = createRigidBody(ball, ballShape, ballMass, pos, quat);
+
+				// const geometrySphere = new THREE.IcosahedronGeometry(0.05, 4);
+				// spheres = new THREE.InstancedMesh(geometrySphere, material, 9);
+				// spheres.castShadow = true;
+				// spheres.receiveShadow = true;
+				// spheres.userData = { mass: 1 };
+
+				// for (let i = 0; i < spheres.count; i++) {
+				// 	matrix.setPosition(Math.random() - 0.5, Math.random() * 2, Math.random() - 0.5);
+				// 	spheres.setMatrixAt(i, matrix);
+				// 	spheres.setColorAt(i, color.setHex(0xffffff * Math.random()));
+				// }
+
+
+				// ballBody.setLinearVelocity(new Ammo.btVector3(pos.x, pos.y, pos.z));
+
+			});
+
+		}
+
+		async function init() {
+			//new Vector3(0.0, - 1, 0.0)
+			physics = await RapierPhysics(new THREE.Vector3(0.0, 0.0, 0.0));
+			position = new THREE.Vector3();
+
+			// camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
+			camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.05, 1000);
+			camera.position.set(- 1, 1.5, 2);
+			camera.lookAt(0, 0.5, 0);
+
+			scene = new THREE.Scene();
+			scene.background = new THREE.Color(0x666666);
+
+
+			const AmbientLight = new THREE.AmbientLight(0x404040);
+			scene.add(AmbientLight);
+
+			// const hemiLight = new THREE.HemisphereLight(0xffffbb, 0x080820, 1);
+			// scene.add(hemiLight);
+
+			// const dirLight = new THREE.DirectionalLight( 0xffffff, 3 );
+			// dirLight.position.set( 5, 5, 5 );
+			// dirLight.castShadow = true;
+			// dirLight.shadow.camera.zoom = 2;
+			// scene.add( dirLight );
+
+			const bulbGeometry = new THREE.IcosahedronGeometry(0.15, 3);//.toNonIndexed();
+			let bulbLight = new THREE.PointLight(0xffee88, 1, 25, 1.5);
+			bulbLight.position.set(0, 0.5, 0);
+			bulbLight.castShadow = true;
+			let bulbLightFar = new THREE.PointLight(0xffffff, 1, 25, 0.5);
+			bulbLightFar.position.set(0, 0.5, 0);
+			bulbLightFar.castShadow = true;
+
+			let bulbMat = new THREE.MeshStandardMaterial({
+				emissive: 0xffee88,
+				emissiveIntensity: 1,
+				color: 0x00ff00
+			});
+			let bulbMesh = new THREE.Mesh(bulbGeometry, bulbMat)
+			bulbMesh.userData = { isWall: true };
+			bulbMesh.position.set(0, 0.5, 0);
+			bulbLight.add(bulbMesh);
+
+			scene.add(bulbLight);
+			scene.add(bulbLightFar);
+			scene.add(bulbMesh);
+			physics.addMesh(bulbMesh, 0, 0);
+
+			// const materialBox = new NODES.MeshBasicNodeMaterial();
+			// const materialBox = new THREE.ShadowMaterial({ color: 0x444444 })
+			// const floor = new THREE.Mesh(
+			// 	new THREE.BoxGeometry(10, 5, 10),
+			// 	materialBox
+			// );
+
+			// floor.position.y = - 2.5;
+			// floor.receiveShadow = true;
+			// floor.userData = { mass: 0 };
+			// scene.add(floor);
+
+			createColoredWall({ x: 0, y: -8, z: 0 }, { x: - Math.PI / 2 })
+			createColoredWall({ x: 0, y: 8, z: 0 }, { x: Math.PI / 2 })
+			createColoredWall({ x: 0, y: 0, z: 8 }, { y: - Math.PI })
+			createColoredWall({ x: 0, y: 0, z: -8 }, {})
+			createColoredWall({ x: 8, y: 0, z: 0 }, { y: -Math.PI / 2 })
+			createColoredWall({ x: -8, y: 0, z: 0 }, { y: Math.PI / 2 })
+			CreateWall({ x: 20, y: 1, z: 20 }, { y: -8 })
+			CreateWall({ x: 20, y: 1, z: 20 }, { y: 8 })
+			CreateWall({ x: 1, y: 20, z: 20 }, { x: -8 })
+			CreateWall({ x: 1, y: 20, z: 20 }, { x: 8 })
+			CreateWall({ x: 20, y: 20, z: 1 }, { z: -8 })
+			CreateWall({ x: 20, y: 20, z: 1 }, { z: 8 })
+
+			const material = new THREE.MeshLambertMaterial();
+			const matrix = new THREE.Matrix4();
+			const color = new THREE.Color();
+
+			// Boxes
+			const geometryBox = new THREE.BoxGeometry(0.075, 0.075, 0.075);
+			boxes = new THREE.InstancedMesh(geometryBox, material, 500);
+			boxes.instanceMatrix.setUsage(THREE.DynamicDrawUsage); // will be updated every frame
+			boxes.castShadow = true;
+			boxes.receiveShadow = true;
+			scene.add(boxes);
+			physics.addMesh(boxes, 1, 1);
+
+			for (let i = 0; i < boxes.count; i++) {
+				matrix.setPosition((Math.random() - 0.5) * 7, (Math.random() - 0.5) * 7, (Math.random() - 0.5) * 7);
+				boxes.setMatrixAt(i, matrix);
+				boxes.setColorAt(i, color.setHex(0xffffff * Math.random()));
+			}
+
+			// Spheres
+			const geometrySphere = new THREE.IcosahedronGeometry(0.05, 4);
+			spheres = new THREE.InstancedMesh(geometrySphere, material, 900);
+			spheres.instanceMatrix.setUsage(THREE.DynamicDrawUsage); // will be updated every frame
+			spheres.castShadow = true;
+			spheres.receiveShadow = true;
+			scene.add(spheres);
+			physics.addMesh(spheres, 1, 1);
+
+			for (let i = 0; i < spheres.count; i++) {
+				matrix.setPosition((Math.random() - 0.5) * 7, (Math.random() - 0.5) * 7, (Math.random() - 0.5) * 7);
+				spheres.setMatrixAt(i, matrix);
+				spheres.setColorAt(i, color.setHex(0xffffff * Math.random()));
+			}
+			physics.addScene(scene);
+
+			renderer = new THREE.WebGLRenderer({ antialias: true });
+			renderer.setPixelRatio(window.devicePixelRatio);
+			renderer.setSize(window.innerWidth, window.innerHeight);
+			renderer.shadowMap.enabled = true;
+			document.body.appendChild(renderer.domElement);
+
+			// renderer = new WebGPURenderer({ antialias: true });
+			// renderer.setPixelRatio(window.devicePixelRatio);
+			// renderer.setSize(window.innerWidth, window.innerHeight);
+			// renderer.setAnimationLoop(animate);
+			// document.body.appendChild(renderer.domElement);
+			// await renderer.init();
+
+			stats = new Stats();
+			document.body.appendChild(stats.dom);
+
+			const controls = new OrbitControls(camera, renderer.domElement);
+			controls.target.y = 0.5;
+			controls.update();
+
+			initInput();
+			animate();
+
+			// setInterval( () => {
+			// 	let index = Math.floor( Math.random() * boxes.count );
+			// 	position.set( 0, Math.random() + 1, 0 );
+			// 	physics.setMeshPosition( boxes, position, index );
+			// 	index = Math.floor( Math.random() * spheres.count );
+			// 	position.set( 0, Math.random() + 1, 0 );
+			// 	physics.setMeshPosition( spheres, position, index );
+			// }, 1000 / 60 );
+
+		}
+
+		function animate() {
+			requestAnimationFrame(animate);
+			renderer.render(scene, camera);
+			stats.update();
+		}
+	</script>
+</body>
+
+</html>
