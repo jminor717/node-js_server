@@ -5,7 +5,7 @@ const { bodyParser } = require("@koa/bodyparser");
 const { WebSocket, WebSocketServer } = require("ws");
 // import WebSocket, { WebSocketServer } from 'ws';
 
-const wss = new WebSocketServer({ port: 8080 });
+const wss = new WebSocketServer({ port: 8888 });
 const app = new Koa();
 const router = new Router();
 const port = 3000;
@@ -169,6 +169,7 @@ const SendMessages = Object.freeze({
     JOIN_SERVER: 'JoinServer',
     ICE_OFFER: 'SendIceSDF',
     ICE_CANDIDATE: 'SendIceCandidate',
+    RELAY: 'relay',
 });
 
 
@@ -178,7 +179,9 @@ const ReceiveMessages = Object.freeze({
     NEW_CONNECTION: 'newPeer',
     ICE_OFFER: 'ReceiveIceSDF',
     ICE_CANDIDATE: 'ReceiveIceCandidate',
+    RELAY: 'relay',
 });
+
 
 wss.on('connection', function connection(ws) {
     ws.isAlive = true;
@@ -190,20 +193,29 @@ wss.on('connection', function connection(ws) {
         console.log('disconnected', ws.ID);
     });
     ws.on('message', function message(da, isBinary) {
-        let data = JSON.parse(da)
-        // console.log(data)
-        switch (data.TYPE) {
-            case SendMessages.INIT: ws.ID = data.MyId; break;
-            case "ActiveServers": ws.ID = data.MyId; break;
-            case SendMessages.JOIN_SERVER: JoinServer(data, ws); break;
-            case "LeaveServer": LeaveServer(ws.ID); break;
-            case SendMessages.CREATE_SERVER: CreateServer(data, ws); break;
-            case SendMessages.ICE_CANDIDATE: relay(data.data, ReceiveMessages.ICE_CANDIDATE, data.TO, ws.ID); break;
-            case SendMessages.ICE_OFFER: relay(data.data, ReceiveMessages.ICE_OFFER, data.TO, ws.ID); break;
-            default:
-                console.log(data)
-                break;
+        if (da[0] == 0X7b) {
+            let data = JSON.parse(da)
+            switch (data.TYPE) {
+                case SendMessages.INIT: ws.ID = data.MyId; break;
+                case "ActiveServers": ws.ID = data.MyId; break;
+                case SendMessages.JOIN_SERVER: JoinServer(data, ws); break;
+                case "LeaveServer": LeaveServer(ws.ID); break;
+                case SendMessages.CREATE_SERVER: CreateServer(data, ws); break;
+                case SendMessages.ICE_CANDIDATE: relay(data.data, ReceiveMessages.ICE_CANDIDATE, data.TO, ws.ID); break;
+                case SendMessages.ICE_OFFER: relay(data.data, ReceiveMessages.ICE_OFFER, data.TO, ws.ID); break;
+                case SendMessages.RELAY: relay(data.data, ReceiveMessages.RELAY, data.TO, ws.ID); break;
+                default:
+                    console.log("Not Implemented",data)
+                    break;
+            }
+        } else if (da[0] == 0XE6) {
+            var enc = new TextDecoder("utf-8");
+            console.log("aeh", enc.decode(da.slice(1, da.byteLength)), da, isBinary)
+        }else{
+            var enc = new TextDecoder("utf-8");
+            console.log(da, enc.decode(da), isBinary)
         }
+
         // wss.clients.forEach(function each(client) {
         //     if (client.readyState === WebSocket.OPEN) {
         //         client.send(JSON.stringify(data), { binary: isBinary });
@@ -216,7 +228,7 @@ function relay(data, type, toId, fromId) {
     if (Object.hasOwnProperty.call(PlayerToServerMap, toId)) {
         let _server = PlayerToServerMap[toId];
         if (ServerTracker.Servers[_server].Sockets[toId]) {
-            console.log("relay TO", toId, type)
+            // console.log("relay TO", toId, type)
             ServerTracker.Servers[_server].Sockets[toId]
                 .send(JSON.stringify({ TYPE: type, FROM: fromId, data: data }, replacer));
         } else {
