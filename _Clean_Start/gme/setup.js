@@ -1,14 +1,35 @@
 "use strict";
 import { UserInputState } from './controls.js';
 import { Builder, Craft } from './builder.js';
-import { ServerNetwork } from './serverNetworking.js';
+import { ServerNetwork, UUID } from './serverNetworking.js';
+import { GameLoop } from './gameLoop.js';
 
-const UserInputs = new UserInputState(1);
+"use strict";
+
+function a(val) { return val + 1; }
+function b(val) { return val - 1; }
+function c(val) { return val * 2 }
+var time = performance.now();
+for (let i = 0; i < 100000000; i++) { a(b(c(100))); }
+console.log(`Elapsed time function calls: ${performance.now() - time}`);
+time = performance.now();
+let tmp;
+for (let i = 0; i < 100000000; i++) { tmp = 100 * 2 + 1 - 1; }
+console.log(`Elapsed time NO function calls:  ${performance.now() - time}`);
+
+let elm = new EventTarget()
+const event = new Event("build");
+elm.addEventListener('build', (e) => { tmp = e * 2 + 1 - 1; }, false);
+time = performance.now();
+for (var i = 0; i < 1000000; i++) { window.dispatchEvent(event); }
+console.log(`Elapsed time events: ${(performance.now() - time) * 100}`);
+
+const canvas = document.getElementById("renderCanvas");
+const UserInputs = new UserInputState(canvas);
 const builder = new Builder();
 document.addEventListener('keydown', (xvt) => UserInputs.onKeyDown(xvt));
 document.addEventListener('keyup', (xvt) => UserInputs.onKeyUp(xvt));
 
-const canvas = document.getElementById("renderCanvas");
 // const engine = new BABYLON.Engine(canvas, true, { preserveDrawingBuffer: true, stencil: true, disableWebGL2Support: false });
 let camera;
 
@@ -24,7 +45,7 @@ let craftProperties = {
     ],
     currentGunIndex: 0
 }
-const MyId = uuidv4();
+const MyId = new UUID();
 console.log(MyId)
 const server = new ServerNetwork(MyId);
 
@@ -35,7 +56,7 @@ const server = new ServerNetwork(MyId);
 const engine = new BABYLON.WebGPUEngine(canvas);
 engine.compatibilityMode = false
 
-async function testNetwork(){
+async function testNetwork() {
     await server.isReady;
     let resp = await server.CreateServer("one");
     if (resp.Servers && Object.hasOwnProperty.call(resp.Servers, "one")) {
@@ -122,8 +143,8 @@ const createScene = async function () {
     // const observable = phy_sphere.getCollisionEndedObservable(); //getCollisionObservable
     // const observer = observable.add((collisionEvent) => { console.log(collisionEvent) });
 
-    const craft = new Craft(craftProperties, scene, builder);
-    
+    const craft = builder.buildCraft(craftProperties, true)
+
     let box1 = BABYLON.Mesh.CreateBox("fixedBox1", 1, scene);
     box1.position.x = 0;
     const col = addMat(box1);
@@ -148,12 +169,13 @@ const createScene = async function () {
     camera.minZ = 0.5;
     camera.attachControl(canvas, true);// This attaches the camera to the canvas
 
-    setupPointerLock();
+    UserInputs.setupPointerLock();
 
-    let gme_loop = new GameLoop(craft, camera, UserInputs)
+    let gme_loop = new GameLoop(craft, camera, UserInputs, server)
 
     craft.OnReady = () => scene.onBeforeRenderObservable.add(() => gme_loop.mainLoop())
-    
+    // setInterval(() => { gme_loop.networkLoop() }, 66);
+    setInterval(() => { gme_loop.networkLoop() }, 5000);
     return scene;
 };
 
@@ -168,109 +190,13 @@ function addMat(mesh, col = null) {
 
 //width (x), height (y) and depth (z)
 
-
-function setupPointerLock() {
-    // when element is clicked, we're going to request a
-    // pointerlock
-    canvas.onclick = function () {
-        canvas.requestPointerLock =
-            canvas.requestPointerLock ||
-            canvas.mozRequestPointerLock ||
-            canvas.webkitRequestPointerLock;
-
-        // Ask the browser to lock the pointer)
-        canvas.requestPointerLock();
-    };
-}
-
-class GameLoop {
-    /**
-     * 
-     * @param {Craft} craftMesh 
-     * @param {*} camera 
-     * @param {*} UserInputs 
-     */
-    constructor(craftMesh, camera, UserInputs) {
-        this.craft = craftMesh;
-        this.camera = camera;
-        this.UserInputs = UserInputs;
-        
-    }
-
-    mainLoop(){
-        // enable teleport
-        //phy_craft.disablePreStep = false;
-        //phy_craft.transformNode.position or setAbsolutePosition
-
-        // calculate force required to keep the craft object pointing in the direction of the camera
-        // console.log(camera, camera.cameraRotation)
-        let craftPointing = new BABYLON.Vector3(0, 0, 1);
-        let cameraPointing = new BABYLON.Vector3(0, 0, 1);
-        craftPointing.applyRotationQuaternionInPlace(this.craft.mesh.rotationQuaternion);
-        cameraPointing.applyRotationQuaternionInPlace(this.camera.absoluteRotation);
-        let dif = craftPointing.subtract(cameraPointing);
-        this.craft.physicsBody.applyImpulse(craftPointing, dif);
-        this.craft.physicsBody.applyImpulse(craftPointing.negate(), dif.negate());
-
-        // calculate the force required to keep the craft oriented right side up relative to the camera
-        let craftUp = new BABYLON.Vector3(0, 1, 0);
-        let cameraUp = new BABYLON.Vector3(0, 1, 0);
-        craftUp.applyRotationQuaternionInPlace(this.craft.mesh.rotationQuaternion);
-        cameraUp.applyRotationQuaternionInPlace(this.camera.absoluteRotation);
-        let difUp = craftUp.subtract(cameraUp);
-        this.craft.physicsBody.applyImpulse(craftUp, difUp);
-        this.craft.physicsBody.applyImpulse(craftUp.negate(), difUp.negate());
-
-        // set angular damping to keep oscillations from building up
-        this.craft.physicsBody.setAngularDamping(10);
-
-        let tmpMove = new BABYLON.Vector3(0, 0, 0);
-        let userRotation = 0;
-        let controlAuthority = 0.2;
-        // if (controls.isLocked === true) {
-        if (this.UserInputs.moveForward) tmpMove.z += 1;
-        if (this.UserInputs.moveBackward) tmpMove.z -= 1;
-
-        if (this.UserInputs.moveRight) tmpMove.x += 0.5;
-        if (this.UserInputs.moveLeft) tmpMove.x -= 0.5;
-
-        if (this.UserInputs.moveUp) tmpMove.y += 0.5;
-        if (this.UserInputs.moveDown) tmpMove.y -= 0.5;
-
-        if (this.UserInputs.rollLeft) userRotation = 0.4;
-        if (this.UserInputs.rollRight) userRotation = -0.4;
-        if (this.UserInputs.activeDecelerate) {
-            let velocity = this.craft.physicsBody.getLinearVelocity(0);
-            let deceleration = velocity.negate().normalizeFromLength(0.4); // TODO not aligned properly, causes acceleration wen looking in different direction
-            tmpMove.addInPlace(deceleration);
-            console.log(velocity, tmpMove)
+createScene().then((scene) => {
+    engine.runRenderLoop(function () {
+        if (scene) {
+            scene.render();
         }
-        // }
-
-
-        userRotation *= 0.1;
-        // this.camera.rotateOnAxis(new THREE.Vector3(0, 0, 1), userRotation)
-
-        tmpMove.applyRotationQuaternionInPlace(this.craft.mesh.rotationQuaternion);
-        tmpMove.scaleInPlace(controlAuthority);
-        if (UserInputs.AnyActiveDirectionalInputs()) {
-            this.craft.physicsBody.applyImpulse(tmpMove, this.craft.position);
-        }
-    }
-}
-function uuidv4() {
-    return "10000000-1000-4000-8000-100000000000".replace(/[018]/g, c =>
-        (+c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> +c / 4).toString(16)
-    );
-}
-
-// createScene().then((scene) => {
-//     engine.runRenderLoop(function () {
-//         if (scene) {
-//             scene.render();
-//         }
-//     });
-// });
+    });
+});
 // Resize
 window.addEventListener("resize", function () {
     engine.resize();

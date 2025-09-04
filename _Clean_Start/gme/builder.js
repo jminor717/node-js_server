@@ -55,9 +55,32 @@ class Craft{
         this.mesh = mesh;
         this.position = mesh.position;
         this.physicsBody = phy_craft;
-        this.OnReady = () => {}
+        /** called after the physics joints have settled and the object is stable */
+        this.OnReady = () => {};
     }
 
+    applyRotationToCamera(camera){
+
+        // calculate force required to keep the craft object pointing in the direction of the camera
+        // console.log(camera, camera.cameraRotation)
+        let craftPointing = new BABYLON.Vector3(0, 0, 1);
+        let cameraPointing = new BABYLON.Vector3(0, 0, 1);
+        craftPointing.applyRotationQuaternionInPlace(this.mesh.rotationQuaternion);
+        cameraPointing.applyRotationQuaternionInPlace(camera.absoluteRotation);
+        let dif = craftPointing.subtract(cameraPointing);
+        this.physicsBody.applyImpulse(craftPointing, dif);
+        this.physicsBody.applyImpulse(craftPointing.negate(), dif.negate());
+
+        // calculate the force required to keep the craft oriented right side up relative to the camera
+        let craftUp = new BABYLON.Vector3(0, 1, 0);
+        let cameraUp = new BABYLON.Vector3(0, 1, 0);
+        craftUp.applyRotationQuaternionInPlace(this.mesh.rotationQuaternion);
+        cameraUp.applyRotationQuaternionInPlace(camera.absoluteRotation);
+        let difUp = craftUp.subtract(cameraUp);
+        this.physicsBody.applyImpulse(craftUp, difUp);
+        this.physicsBody.applyImpulse(craftUp.negate(), difUp.negate());
+
+    }
 }
 
 class Builder {
@@ -66,8 +89,8 @@ class Builder {
     }
 
 
-    buildCraft(isSelf){
-
+    buildCraft(craftProperties, isSelf){
+        return new Craft(craftProperties, scene, this);
     }
 
     bindBodyShape(mesh, shape, scene, physicsMaterial) {

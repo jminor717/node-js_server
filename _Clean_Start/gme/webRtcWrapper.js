@@ -1,5 +1,5 @@
 'use strict';
-import { ServerNetwork } from './serverNetworking.js';
+import { ServerNetwork, UUID } from './serverNetworking.js';
 
 const servers = null;
 
@@ -7,7 +7,7 @@ const servers = null;
 class RTCPeer {
     /**
      * 
-     * @param {string} myId 
+     * @param {UUID} myId 
      * @param {string} remoteId 
      * @param {ServerNetwork} server 
      */
@@ -20,14 +20,28 @@ class RTCPeer {
         this.sendChannel;
         this.candidates = [];
         this.hasRemote = false;
+
+        this.receivedData = (data) => {};
+        this.WebRtcFailed = false;
+        this.Connected = false;
+
+        this.readyToSend = () => {};
     }
+
+
+
 
     onReceiveMessageCallback(event) {
         console.log('Received Message', event);
+        this.receivedData(data);
         //todo receive Data   event.data
     }
 
-
+    sendData(data){
+        if (this.Connected) {
+            this.sendChannel.send(data)
+        }
+    }
 
 
     /**
@@ -42,6 +56,7 @@ class RTCPeer {
         this.sendChannel.onopen = (event) => this.onSendChannelStateChange(event);
         this.sendChannel.onclose = (event) => this.onSendChannelStateChange(event);
         this.sendChannel.onmessage = this.onReceiveMessageCallback;
+        
 
         this.localConnection.onicecandidate = e => { this.Server.relayCandidate(this.RemoteId, e.candidate) };
 
@@ -62,6 +77,13 @@ class RTCPeer {
         // console.log("got desc ", desc)
         this.localConnection.setRemoteDescription(desc);
         this.flushIce();
+        setTimeout(() => {
+            if (this.sendChannel.readyState == "connecting") {
+                this.WebRtcFailed = true;
+                console.log("WebRTC failed", this.sendChannel);
+                this.readyToSend();
+            }
+        }, 5000)
     }
 
     /**
@@ -86,6 +108,14 @@ class RTCPeer {
         this.localConnection.createAnswer().then(gotDescription, this.onCreateSessionDescriptionError);
 
         this.localConnection.ondatachannel = (event) => this.receiveChannelCallback(event);
+
+        setTimeout(() => {
+            if (this.sendChannel == null || this.sendChannel.readyState == "connecting") {
+                this.WebRtcFailed = true;
+                console.log("WebRTC failed", this.sendChannel)
+                this.readyToSend();
+            }
+        }, 5000)
     }
 
     receiveChannelCallback(event) {
@@ -120,7 +150,9 @@ class RTCPeer {
         const readyState = this.sendChannel.readyState;
         console.log('Send channel state is: ' + readyState, ev);
         if (readyState == "open") {
-            this.sendChannel.send("oh hi")
+            this.Connected = true;
+            this.readyToSend();
+            // this.sendChannel.send("oh hi")
         }
     }
 }
