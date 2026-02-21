@@ -1,10 +1,8 @@
 "use strict";
 import { UserInputState } from './controls.js';
-import { Builder, Craft } from './builder.js';
+import { Builder, Craft, CraftProperties } from './builder.js';
 import { ServerNetwork, UUID } from './serverNetworking.js';
 import { GameLoop } from './gameLoop.js';
-
-"use strict";
 
 function a(val) { return val + 1; }
 function b(val) { return val - 1; }
@@ -12,10 +10,6 @@ function c(val) { return val * 2 }
 var time = performance.now();
 for (let i = 0; i < 100000000; i++) { a(b(c(100))); }
 console.log(`Elapsed time function calls: ${performance.now() - time}`);
-time = performance.now();
-let tmp;
-for (let i = 0; i < 100000000; i++) { tmp = 100 * 2 + 1 - 1; }
-console.log(`Elapsed time NO function calls:  ${performance.now() - time}`);
 
 let elm = new EventTarget()
 const event = new Event("build");
@@ -25,26 +19,14 @@ for (var i = 0; i < 1000000; i++) { window.dispatchEvent(event); }
 console.log(`Elapsed time events: ${(performance.now() - time) * 100}`);
 
 const canvas = document.getElementById("renderCanvas");
-const UserInputs = new UserInputState(canvas);
-const builder = new Builder();
-document.addEventListener('keydown', (xvt) => UserInputs.onKeyDown(xvt));
-document.addEventListener('keyup', (xvt) => UserInputs.onKeyUp(xvt));
+const PauseUi = document.getElementById("blocker");
+const UserInputs = new UserInputState(canvas, PauseUi);
 
 // const engine = new BABYLON.Engine(canvas, true, { preserveDrawingBuffer: true, stencil: true, disableWebGL2Support: false });
 let camera;
+let worldBoxSize = 100;
 
-let craftProperties = {
-    mass: 1,
-    inertia: 1,
-    diameter: 2,
-    gunPositions: [
-        new BABYLON.Vector3(-0.7, -0.7, 1),
-        new BABYLON.Vector3(0.7, -0.7, 1),
-        new BABYLON.Vector3(0.7, 0.7, 1),
-        new BABYLON.Vector3(-0.7, 0.7, 1)
-    ],
-    currentGunIndex: 0
-}
+let craftProperties = new CraftProperties();
 const MyId = new UUID();
 console.log(MyId)
 const server = new ServerNetwork(MyId);
@@ -60,9 +42,37 @@ async function testNetwork() {
     await server.isReady;
     let resp = await server.CreateServer("one");
     if (resp.Servers && Object.hasOwnProperty.call(resp.Servers, "one")) {
-        // console.log(resp.Servers.one)
+        console.log(resp.Servers)
         // network.FindIceFor();
         let inServer = await server.JoinServer("one")
+        console.log("inServer", inServer)
+
+    }
+
+    let displayServers = (resp) => {
+        let serverNames = "[";
+        for (const key in resp.Servers) {
+            if (!Object.hasOwn(resp.Servers, key)) continue;
+            const element = resp.Servers[key];
+            console.log(key, element)
+            serverNames += " " + element.ServerName + ", ";
+        }
+        serverNames = serverNames.substring(0, serverNames.length - 2);
+        serverNames += " ]";
+        UserInputs.GuiControls.knownServers = serverNames;
+        console.log(UserInputs.GuiControls.knownServers, serverNames)
+    }
+    UserInputs.GuiControls.createServer = async () => {
+        let resp = await server.CreateServer(UserInputs.GuiControls.serverName);
+        displayServers(resp);
+    }
+    UserInputs.GuiControls.joinServer = async () => {
+        let resp = await server.JoinServer(UserInputs.GuiControls.serverName);
+        displayServers(resp);
+    }
+    UserInputs.GuiControls.listServers = async () => {
+        let resp = await server.ListServers();
+        displayServers(resp);
     }
 }
 testNetwork();
@@ -76,15 +86,17 @@ const createScene = async function () {
     scene.performancePriority = BABYLON.ScenePerformancePriority.Aggressive;
     // scene.ambientColor = new BABYLON.Color3(200, 0, 10);
 
-    let light = new BABYLON.HemisphericLight("light1", new BABYLON.Vector3(0, 1, 0), scene);// This creates a light, aiming 0,1,0 - to the sky (non-mesh)
-    light.intensity = 0.7;// Default intensity is 1. Let's dim the light a small amount
 
-    let dirLight = new BABYLON.DirectionalLight("dirLight", new BABYLON.Vector3(0, -1, 1));
-    dirLight.autoCalcShadowZBounds = true;
-    dirLight.intensity = 0.2;
-    let shadowGen = new BABYLON.ShadowGenerator(1024, dirLight);
-    shadowGen.bias = 0.01;
-    shadowGen.usePercentageCloserFiltering = true;
+
+    // let light = new BABYLON.HemisphericLight("light1", new BABYLON.Vector3(0, 1, 0), scene);// This creates a light, aiming 0,1,0 - to the sky (non-mesh)
+    // light.intensity = 0.7;// Default intensity is 1. Let's dim the light a small amount
+
+    // let dirLight = new BABYLON.DirectionalLight("dirLight", new BABYLON.Vector3(0, -1, 1));
+    // dirLight.autoCalcShadowZBounds = true;
+    // dirLight.intensity = 0.2;
+    // let shadowGen = new BABYLON.ShadowGenerator(1024, dirLight);
+    // shadowGen.bias = 0.01;
+    // shadowGen.usePercentageCloserFiltering = true;
 
     // var advancedTexture = BABYLON.GUI.AdvancedDynamicTexture.CreateFullscreenUI("UI");
 
@@ -93,8 +105,40 @@ const createScene = async function () {
     scene.enablePhysics(new BABYLON.Vector3(0, -gravity, 0), hk); // enable physics in the scene with a gravity
     let physicsEngine = scene.getPhysicsEngine();
 
+    const builder = new Builder(scene);
+
+
+    var pointLight = new BABYLON.PointLight("pl", new BABYLON.Vector3(0, 0, 0), scene);
+    pointLight.autoCalcShadowZBounds = true;
+    pointLight.intensity = 0.5;
+    pointLight.diffuse = new BABYLON.Color3(244 / 255, 233 / 255, 155 / 255);
+    let shadowGen = new BABYLON.ShadowGenerator(1024, pointLight);  // TODO: Shadows not working
+    // shadowGen.bias = 0.01;
+    shadowGen.usePercentageCloserFiltering = true;
+    shadowGen.filteringQuality = BABYLON.ShadowGenerator.FILTER_PCF;
+    scene.shadowGen = shadowGen;
+    
+    const baseMat = new BABYLON.StandardMaterial("sunMat", scene);
+    const sun = BABYLON.MeshBuilder.CreateSphere("sunMesh", { diameter: 6, segments: 4 }, scene);
+    sun.material = baseMat;
+    const sunShape = new BABYLON.PhysicsShapeSphere(new BABYLON.Vector3(0, 0, 0), 3, scene);
+    let phy_sun = new BABYLON.PhysicsBody(sun, BABYLON.PhysicsMotionType.STATIC, false, scene);
+    sunShape.density = 2;
+    sunShape.material = { friction: 0.2, restitution: 0.2 };
+    phy_sun.shape = (sunShape);
+    const gl = new BABYLON.GlowLayer("glow", scene);
+    gl.intensity = 0.5;
+    gl.addIncludedOnlyMesh(sun);
+    gl.customEmissiveColorSelector = function (mesh, subMesh, material, result) {
+        if (mesh.name === "sunMesh") {
+            result.set(244 / 255, 233 / 255, 155 / 255, 1);
+        } else {
+            result.set(0, 0, 0, 0);
+        }
+    };
+
     // body/shape on box
-    builder.BoxWorld(scene, new BABYLON.Vector3(0, -10, 0), 100, shadowGen);
+    builder.BoxWorld(scene, new BABYLON.Vector3(0, -(worldBoxSize / 2), 0), worldBoxSize, shadowGen);
 
     let boxShape = new BABYLON.PhysicsShapeBox(new BABYLON.Vector3(0, 0, 0), BABYLON.Quaternion.Identity(), new BABYLON.Vector3(1, 1, 1), scene);
     let instanceBox = BABYLON.MeshBuilder.CreateBox("root", { size: 1 });
@@ -119,6 +163,7 @@ const createScene = async function () {
     const sphere = BABYLON.MeshBuilder.CreateSphere("sphere", { diameter: 2, segments: 4 }, scene);
     sphere.position.y = 4;
     sphere.material = baseMaterial;
+    shadowGen.addShadowCaster(sphere);
     const shape = new BABYLON.PhysicsShapeSphere(new BABYLON.Vector3(0, 0, 0), 1, /*radius of the sphere*/ scene);
 
 
@@ -146,11 +191,13 @@ const createScene = async function () {
     const craft = builder.buildCraft(craftProperties, true)
 
     let box1 = BABYLON.Mesh.CreateBox("fixedBox1", 1, scene);
-    box1.position.x = 0;
+    box1.position.y = -5;
+    shadowGen.addShadowCaster(box1);
     const col = addMat(box1);
 
     let box2 = BABYLON.Mesh.CreateBox("fixedBox2", 1, scene);
-    box2.position = new BABYLON.Vector3(0, 0, -2);
+    box2.position = new BABYLON.Vector3(0, -5, -2);
+    shadowGen.addShadowCaster(box2);
     addMat(box2, col);
 
     let joint = new BABYLON.LockConstraint(
@@ -163,6 +210,7 @@ const createScene = async function () {
     camera = new BABYLON.FlyCamera("cam", new BABYLON.Vector3(0, 0, 0), scene); //FreeCamera, UniversalCamera
     camera.keysForward = []; camera.keysBackward = []; camera.keysDown = []; camera.keysUp = []; camera.keysLeft = []; camera.keysRight = [];
     camera.position = craft.position;
+    camera.setTarget(new BABYLON.Vector3(0, 0, 0));
     // camera.position = new BABYLON.Vector3(0, 15, -30);
     // camera.setTarget(craft.position);
 
@@ -171,11 +219,16 @@ const createScene = async function () {
 
     UserInputs.setupPointerLock();
 
-    let gme_loop = new GameLoop(craft, camera, UserInputs, server)
+    let gme_loop = new GameLoop(craft, camera, UserInputs, server, builder);
+
+    document.addEventListener('keydown', (xvt) => UserInputs.onKeyDown(xvt));
+    document.addEventListener('keyup', (xvt) => UserInputs.onKeyUp(xvt));
+    document.addEventListener('mousedown', (xvt) => gme_loop.userMouseDown(xvt), false);
 
     craft.OnReady = () => scene.onBeforeRenderObservable.add(() => gme_loop.mainLoop())
     // setInterval(() => { gme_loop.networkLoop() }, 66);
     setInterval(() => { gme_loop.networkLoop() }, 5000);
+    gme_loop.server
     return scene;
 };
 

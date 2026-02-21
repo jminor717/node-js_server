@@ -17,11 +17,12 @@ class RTCPeer {
         // console.log("webRtc for: ", this.MyId, " remote: ", this.RemoteId)
         this.Server = server;
         this.localConnection;
+        /** @type {RTCDataChannel} */
         this.sendChannel;
         this.candidates = [];
         this.hasRemote = false;
 
-        this.receivedData = (data) => {};
+        this.receivedData = (data, isBinary) => {};
         this.WebRtcFailed = false;
         this.Connected = false;
 
@@ -33,7 +34,7 @@ class RTCPeer {
 
     onReceiveMessageCallback(event) {
         console.log('Received Message', event);
-        this.receivedData(data);
+        this.receivedData(data, isBinary);
         //todo receive Data   event.data
     }
 

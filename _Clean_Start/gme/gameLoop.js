@@ -26,26 +26,36 @@ class GameLoop {
      * @param {*} camera 
      * @param {UserInputState} UserInputs 
      * @param {ServerNetwork} Server 
+     * @param {Builder} builder 
      */
-    constructor(craftMesh, camera, UserInputs, Server) {
+    constructor(craftMesh, camera, UserInputs, Server, builder) {
         this.craft = craftMesh;
         this.camera = camera;
         this.UserInputs = UserInputs;
         this.server = Server;
-        this.server.receiveDataFromPlayer = (data, from) => { this.receiveDataFromPlayer(data, from) }
+        this.builder = builder;
+        this.server.receiveDataFromPlayer = (data, from, isBinary) => { this.receiveDataFromPlayer(data, from, isBinary) }
+        this.UserInputs.Space = () => { this.userMouseDown({ button: 0 }) }
     }
 
-    receiveDataFromPlayer(data, from){
-        switch (data.type) {
-            case NetworkUpdates.PLAYER_JOIN.ID:
-                break;
-            case NetworkUpdates.PLAYER_LEAVE.ID:
-                break;
-            case NetworkUpdates.PLAYER_MOVE.ID:
-                break;
-            default:
-                break;
+    receiveDataFromPlayer(data, from, isBinary){
+        // console.log("received data from player", data, from, isBinary)
+        if (isBinary) {
+            let z = new Float32Array(data, this.server.headerLength); // skip first 4 bytes which are player id
+            console.log(from, 'received:', data.byteLength, ' bytes binary data', z);
+        }else{
+            switch (data.type) {
+                case NetworkUpdates.PLAYER_JOIN.ID:
+                    break;
+                case NetworkUpdates.PLAYER_LEAVE.ID:
+                    break;
+                case NetworkUpdates.PLAYER_MOVE.ID:
+                    break;
+                default:
+                    break;
+            }
         }
+
     }
 
     networkLoop() {
@@ -54,6 +64,55 @@ class GameLoop {
         // this.craft.position
         this.server.sendToPlayers({ type: NetworkUpdates.PLAYER_JOIN.ID, data: this.craft.position })
     }
+
+
+    single(position, direction, mass, radius, speed) {
+        let arr = new Float32Array(3);
+        arr[0] = position.x;
+        arr[1] = position.y;
+        arr[2] = position.z;
+        this.server.sendToPlayers(arr.buffer, true);
+        this.builder.single(position, direction, mass, radius, speed);
+        // console.log("sent single",  arr.buffer)
+        // let buf = arr.buffer;
+        // let z = new Float32Array(buf);
+        // console.log("binary", buf, z, arr)
+
+    }
+
+
+    singleFromPlayer(position, direction, mass, radius, speed) {
+        position = position.add(direction.normalize().scale(2)) // spawn a bit in front of player to avoid immediate collision
+
+        let arr = new Float32Array(3);
+        arr[0] = position.x;
+        arr[1] = position.y;
+        arr[2] = position.z;
+        this.server.sendToPlayers(arr.buffer, true);
+        this.builder.single(position, direction, mass, radius, speed);
+        // console.log("sent single",  arr.buffer)
+        // let buf = arr.buffer;
+        // let z = new Float32Array(buf);
+        // console.log("binary", buf, z, arr)
+
+    }
+
+    userMouseDown(xvt){
+        if (this.UserInputs.IsLocked === true) {
+            let craftPointing = new BABYLON.Vector3(0, 0, 1);
+            craftPointing.applyRotationQuaternionInPlace(this.craft.mesh.rotationQuaternion);
+
+            // console.log("mouse down", xvt.button, xvt)
+            if (xvt.button == 0) { }
+            switch (xvt.button) {
+                case 0: this.singleFromPlayer(this.craft.position.clone(), craftPointing, 1, 0.25, 100); break;
+                case 1: break; // middle click
+                case 2: break; // right click
+                default: break;
+            }
+        }
+    }
+
 
     mainLoop() {
         // enable teleport
@@ -74,7 +133,7 @@ class GameLoop {
 
             if (this.UserInputs.activeDecelerate) {
                 let velocity = this.craft.physicsBody.getLinearVelocity(0);
-                deceleration = velocity.negate().normalizeFromLength(0.1); // TODO not aligned properly, causes acceleration wen looking in different direction
+                deceleration = velocity.negate().normalizeFromLength(0.99999999); // TODO not aligned properly, causes acceleration wen looking in different direction
                 // console.log(velocity, deceleration)
             }
             tmpMove.applyRotationQuaternionInPlace(this.craft.mesh.rotationQuaternion);

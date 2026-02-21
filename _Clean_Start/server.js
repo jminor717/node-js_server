@@ -158,6 +158,10 @@ function JoinServer(request, ws) {
     }
 }
 
+function ListServers(request, ws) {
+    ws.send(JSON.stringify({ TYPE: ReceiveMessages.ACTIVE, data: ServerTracker }, replacer));
+}
+
 function replacer(key, value) {
     if (key == "Sockets") return undefined;
     else return value;
@@ -167,6 +171,7 @@ const SendMessages = Object.freeze({
     INIT: 'init',
     CREATE_SERVER: 'CreateServer',
     JOIN_SERVER: 'JoinServer',
+    LIST_SERVERS: 'ListServers',
     ICE_OFFER: 'SendIceSDF',
     ICE_CANDIDATE: 'SendIceCandidate',
     RELAY: 'relay',
@@ -193,12 +198,13 @@ wss.on('connection', function connection(ws) {
         console.log('disconnected', ws.ID);
     });
     ws.on('message', function message(da, isBinary) {
-        if (da[0] == 0X7b) {
+        if (!isBinary) {
             let data = JSON.parse(da)
             switch (data.TYPE) {
                 case SendMessages.INIT: ws.ID = data.MyId; break;
                 case "ActiveServers": ws.ID = data.MyId; break;
                 case SendMessages.JOIN_SERVER: JoinServer(data, ws); break;
+                case SendMessages.LIST_SERVERS: ListServers(data, ws); break;
                 case "LeaveServer": LeaveServer(ws.ID); break;
                 case SendMessages.CREATE_SERVER: CreateServer(data, ws); break;
                 case SendMessages.ICE_CANDIDATE: relay(data.data, ReceiveMessages.ICE_CANDIDATE, data.TO, ws.ID); break;
@@ -212,8 +218,18 @@ wss.on('connection', function connection(ws) {
             var enc = new TextDecoder("utf-8");
             console.log("aeh", enc.decode(da.slice(1, da.byteLength)), da, isBinary)
         }else{
-            var enc = new TextDecoder("utf-8");
-            console.log(da, enc.decode(da), isBinary)
+            // var enc = new TextDecoder("utf-8");  enc.decode(da),
+            // let z = new Float32Array(da);
+            // console.log("binary", da, isBinary, z, z[0], z[1], z[2])
+            // let arr = new Float32Array(3);
+            let TestServer = ServerTracker.Servers["one"].Sockets;
+            for (const key in TestServer) {
+                if (!Object.hasOwn(TestServer, key)) continue;
+                
+                const element = TestServer[key];
+                element.send(da, { binary: true });
+                // element.send(da, { binary: isBinary });
+            }
         }
 
         // wss.clients.forEach(function each(client) {

@@ -6,6 +6,7 @@ const SendMessages = Object.freeze({
     INIT: 'init',
     CREATE_SERVER: 'CreateServer',
     JOIN_SERVER: 'JoinServer',
+    LIST_SERVERS: 'ListServers',
     ICE_OFFER: 'SendIceSDF',
     ICE_CANDIDATE: 'SendIceCandidate',
     RELAY: 'relay',
@@ -23,7 +24,7 @@ const ReceiveMessages = Object.freeze({
 
 class UUID {
     constructor() {
-        this.array = new Uint8Array(5);
+        this.array = new Uint8Array(4);
         crypto.getRandomValues(this.array);
         this.ID = parseInt(this.array.join(''), 10);
     }
@@ -35,50 +36,69 @@ class ServerNetwork {
      */
     constructor(myId) {
         this.MyId = myId;
+        /**
+         * @type {Object.<string, RTCPeer>}
+         */
         this.Connections = {}
-        this.receiveDataFromPlayer = (data, from) => { }
+        this.receiveDataFromPlayer = (data, from, isBinary) => { }
+        this.headerLength = 8; // 4 bytes for from id, 4 to id
 
         this.socket = new WebSocket("ws://localhost:8888"); // wss://
+
+        // Change binary type from "blob" to "arraybuffer" to receive binary data as ArrayBuffer
+        // keeps data in memory and modifiable
+        this.socket.binaryType = "arraybuffer";
+
         this.isReady = new Promise((resolve, reject) => {
             this.socket.onopen = (event) => {
                 this.socket.send(JSON.stringify({ MyId: this.MyId.ID, TYPE: SendMessages.INIT }));
                 resolve();
             };
         });
+        
 
         this.socket.onmessage = (event) => {
-            let data = JSON.parse(event.data);
+            if (this.isBinary(event.data)) {
+                let z = new Uint32Array(event.data);
+                // console.log('received:', event.data.byteLength, ' bytes binary data', event.data, z);
+                this.receiveDataFromPlayer(event.data, z[1], true);
+            }else{
+                let data = JSON.parse(event.data);
 
-            switch (data.TYPE) {
-                case ReceiveMessages.ACTIVE:
-                    this.activeResponse(data.data);
-                    break;
-                case ReceiveMessages.ERROR:
-                    this.errorResponse(data.message);
-                    break;
-                case ReceiveMessages.NEW_CONNECTION:
-                    // this.newConnection(data.FROM);
-                    break;
-                case ReceiveMessages.ICE_OFFER:
-                    this.receiveOffer(data.FROM, data.data);
-                    break;
-                case ReceiveMessages.ICE_CANDIDATE:
-                    this.receiveCandidate(data.FROM, data.data);
-                    break;
-                case ReceiveMessages.RELAY:
-                    this.receiveDataFromPlayer(data.data, data.FROM);
-                    break;
-                default:
-                    console.log("Unknown " + data.TYPE, data)
-                    break;
+                switch (data.TYPE) {
+                    case ReceiveMessages.ACTIVE:
+                        this.activeResponse(data.data);
+                        break;
+                    case ReceiveMessages.ERROR:
+                        this.errorResponse(data.message);
+                        break;
+                    case ReceiveMessages.NEW_CONNECTION:
+                        // this.newConnection(data.FROM);
+                        break;
+                    case ReceiveMessages.ICE_OFFER:
+                        this.receiveOffer(data.FROM, data.data);
+                        break;
+                    case ReceiveMessages.ICE_CANDIDATE:
+                        this.receiveCandidate(data.FROM, data.data);
+                        break;
+                    case ReceiveMessages.RELAY:
+                        this.receiveDataFromPlayer(data.data, data.FROM, false);
+                        break;
+                    default:
+                        console.log("Unknown " + data.TYPE, data)
+                        break;
+                }
             }
+
         };
 
         this.activeResponse = (data) => { };
         this.errorResponse = (data) => { };
     }
 
-
+    isBinary(value) {
+        return value && value instanceof ArrayBuffer && value.byteLength !== undefined;
+    }
 
     async getActiveServers() {
         // let resp = await fetch("ActiveServers", { method: "GET" })
@@ -109,6 +129,15 @@ class ServerNetwork {
             this.errorResponse = (data) => { reject(data) };
         });
 
+    }
+
+    async ListServers() {
+        let request = { MyId: this.MyId.ID, TYPE: SendMessages.LIST_SERVERS };
+        this.socket.send(JSON.stringify(request))
+        return new Promise((resolve, reject) => {
+            this.activeResponse = (data) => { resolve(data) };
+            this.errorResponse = (data) => { reject(data) };
+        });
     }
 
     async JoinServer(serverName) {
@@ -153,7 +182,7 @@ class ServerNetwork {
         if (!this.Connections[fromId]) {
             const network = new RTCPeer(this.MyId.ID, fromId, this)
             network.AcceptRemote(offer);
-            network.receivedData = (data) => { this.receiveDataFromPlayer(data, fromId) };
+            network.receivedData = (data, isBinary) => { this.receiveDataFromPlayer(data, fromId, isBinary) };
             this.Connections[fromId] = network;
         } else {
             this.Connections[fromId].RemoteOffer(offer)
@@ -168,7 +197,7 @@ class ServerNetwork {
     newConnection(fromId) {
         const network = new RTCPeer(this.MyId.ID, fromId, this)
         network.FindIce();
-        network.receivedData = (data) => { this.receiveDataFromPlayer(data, fromId) };
+        network.receivedData = (data, isBinary) => { this.receiveDataFromPlayer(data, fromId, isBinary) };
         this.Connections[fromId] = network;
     }
 
@@ -183,19 +212,34 @@ class ServerNetwork {
         // console.log(body)
     }
 
-    sendToPlayers(data){
+    sendToPlayers(data, asBinary = false) {
         for (const key in this.Connections) {
             if (Object.prototype.hasOwnProperty.call(this.Connections, key)) {
                 const connection = this.Connections[key];
-                if (connection.WebRtcFailed) {
-                    let request = { MyId: this.MyId.ID, TYPE: SendMessages.RELAY, TO: key, data: data };
-                    this.socket.send(JSON.stringify(request))
+                let sendData;
+
+                if (asBinary) {
+                    if (connection.WebRtcFailed) {
+                        var array1 = new Uint32Array([key, this.MyId.ID]);
+                        data = new Blob([array1, data])
+                    }
+                    sendData = data; // should be ArrayBuffer
                 }else{
-                    connection.sendData(data);
+                    let request = data;
+                    if (connection.WebRtcFailed) {
+                        request = { MyId: this.MyId.ID, TYPE: SendMessages.RELAY, TO: key, data: data };
+                    }
+                    sendData = JSON.stringify(request);
+                }
+
+                
+                if (connection.WebRtcFailed) {
+                    this.socket.send(sendData) // data: string | Blob | ArrayBuffer | TypedArray or a DataView
+                }else{
+                    connection.sendData(sendData); // data: string | Blob | ArrayBuffer | TypedArray or a DataView
                 }
             }
         }
     }
 }
-
 export { ServerNetwork, UUID };
