@@ -195,7 +195,9 @@ class ServerNetwork {
         if (!this.Connections[fromId]) {
             const network = new RTCPeer(this.MyId.ID, fromId, this)
             network.AcceptRemote(offer);
-            network.receivedData = (data, isBinary) => { this.receiveDataFromPlayer(data, fromId, isBinary) };
+            network.receivedData = (data, isBinary) => { 
+                this.receiveDataFromPlayer(data, fromId, isBinary) 
+            };
             this.Connections[fromId] = network;
         } else {
             this.Connections[fromId].RemoteOffer(offer)
@@ -210,7 +212,9 @@ class ServerNetwork {
     newConnection(fromId) {
         const network = new RTCPeer(this.MyId.ID, fromId, this)
         network.FindIce();
-        network.receivedData = (data, isBinary) => { this.receiveDataFromPlayer(data, fromId, isBinary) };
+        network.receivedData = (data, isBinary) => { 
+            this.receiveDataFromPlayer(data, fromId, isBinary) 
+        };
         this.Connections[fromId] = network;
     }
 

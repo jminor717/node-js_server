@@ -51,9 +51,38 @@ class RTCPeer {
 
 
     onReceiveMessageCallback(event) {
-        console.log('Received Message', event);
-        // this.receivedData(data, isBinary);
-        //todo receive Data   event.data
+         console.log('Received Message', event);
+
+        const payload = event.data;
+        if (typeof payload === 'string') {
+            console.log('Received string', event.data);
+            this.receivedData(payload, false);
+            return;
+        }
+
+        if (payload instanceof ArrayBuffer) {
+            console.log('Received ArrayBuffer', event.data);
+            this.receivedData(payload, true);
+            return;
+        }
+
+        if (payload instanceof Blob) {
+            console.log('Received Blob', event.data);
+            payload.arrayBuffer().then((buffer) => this.receivedData(buffer, true)).catch((error) => {
+                console.error('Failed to read binary payload', error);
+            });
+            return;
+        }
+
+        if (payload instanceof Uint8Array) {
+            console.log('Received Uint8Array', event.data);
+            this.receivedData(payload.buffer, true);
+            return;
+        }
+
+        console.log('Received ?', event);
+
+        this.receivedData(payload, false);
     }
 
     sendData(data){
@@ -81,7 +110,7 @@ class RTCPeer {
         this.sendChannel = this.localConnection.createDataChannel('sendDataChannel');
         this.sendChannel.onopen = (event) => this.onSendChannelStateChange(event);
         this.sendChannel.onclose = (event) => this.onSendChannelStateChange(event);
-        this.sendChannel.onmessage = this.onReceiveMessageCallback;
+        this.sendChannel.onmessage = (event) => this.onReceiveMessageCallback(event);
         
 
         this.localConnection.onicecandidate = e => { this.Server.relayCandidate(this.RemoteId, e.candidate) };
@@ -154,7 +183,7 @@ class RTCPeer {
     receiveChannelCallback(event) {
         // console.log('Receive Channel Callback', event);
         this.sendChannel = event.channel;
-        this.sendChannel.onmessage = this.onReceiveMessageCallback;
+        this.sendChannel.onmessage = (event) => this.onReceiveMessageCallback(event);
         this.sendChannel.onopen = (event) => this.onSendChannelStateChange(event);
         this.sendChannel.onclose = (event) => this.onSendChannelStateChange(event);
     }

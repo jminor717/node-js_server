@@ -6,6 +6,98 @@
 <head>
     <link rel="stylesheet" type="text/css" href="index_style.css">
     <title>title</title>
+    <style>
+        #rtc-debug-panel {
+            margin: 32px auto;
+            max-width: 900px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            border: 1px solid #666;
+            border-radius: 12px;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        #rtc-debug-panel h2 {
+            margin-top: 0;
+        }
+
+        .rtc-controls,
+        .rtc-row {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+        }
+
+        .rtc-controls label,
+        .rtc-row label {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            font-size: 12px;
+        }
+
+        .rtc-controls input,
+        .rtc-controls select,
+        .rtc-controls textarea,
+        .rtc-row input,
+        .rtc-row select,
+        .rtc-row textarea {
+            font: inherit;
+            padding: 8px 10px;
+            border-radius: 8px;
+            border: 1px solid #999;
+        }
+
+        .rtc-controls input,
+        .rtc-controls select {
+            min-width: 180px;
+        }
+
+        .rtc-controls textarea,
+        .rtc-row textarea {
+            width: 100%;
+            min-height: 80px;
+            resize: vertical;
+        }
+
+        .rtc-controls button,
+        .rtc-row button {
+            padding: 10px 14px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            background: #4ea3ff;
+            color: black;
+            font-weight: bold;
+        }
+
+        .rtc-box {
+            flex: 1;
+            min-width: 260px;
+        }
+
+        #debug-log {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid #777;
+            border-radius: 8px;
+            min-height: 180px;
+            max-height: 220px;
+            overflow: auto;
+            padding: 10px;
+            white-space: pre-wrap;
+            font-family: Consolas, monospace;
+            font-size: 12px;
+        }
+
+        .status {
+            margin-top: 8px;
+            min-height: 20px;
+            color: #cbe6ff;
+        }
+    </style>
 </head>
 
 <body>
@@ -44,7 +136,189 @@
         </div>
     </div>
 
+    <section id="rtc-debug-panel">
+        <h2>WebRTC Debug</h2>
+        <p>Open this page in two tabs/windows to test peer-to-peer traffic without opening the game.</p>
 
+        <div class="rtc-controls">
+            <label>
+                Signal URL
+                <input id="signalUrl" value="ws://localhost:8088" />
+            </label>
+            <label>
+                Room name
+                <input id="roomName" value="debug-room" />
+            </label>
+            <button id="createServerBtn" type="button">Create room</button>
+            <button id="joinServerBtn" type="button">Join room</button>
+        </div>
+
+        <div class="status" id="rtcStatus">Disconnected</div>
+
+        <div class="rtc-row">
+            <div class="rtc-box">
+                <label>
+                    Payload type
+                    <select id="payloadType">
+                        <option value="text">Text</option>
+                        <option value="json">JSON</option>
+                        <option value="binary">Binary</option>
+                    </select>
+                </label>
+                <textarea id="payloadText" placeholder="Type text, JSON, or comma-separated bytes like 1,2,3,4"></textarea>
+                <div class="rtc-controls">
+                    <button id="sendPayloadBtn" type="button">Send to peers</button>
+                </div>
+            </div>
+
+            <div class="rtc-box">
+                <label>
+                    Peers
+                    <input id="peerList" value="No peers yet" readonly />
+                </label>
+                <div id="debug-log"></div>
+            </div>
+        </div>
+    </section>
+
+    <script type="module">
+        import { ServerNetwork, UUID } from '/gme/serverNetworking.js';
+
+        const statusEl = document.getElementById('rtcStatus');
+        const signalUrlEl = document.getElementById('signalUrl');
+        const roomNameEl = document.getElementById('roomName');
+        const payloadTypeEl = document.getElementById('payloadType');
+        const payloadTextEl = document.getElementById('payloadText');
+        const debugLogEl = document.getElementById('debug-log');
+        const peerListEl = document.getElementById('peerList');
+
+        let network = null;
+
+        function appendLog(message) {
+            const stamp = new Date().toLocaleTimeString();
+            debugLogEl.textContent += `[${stamp}] ${message}\n`;
+            debugLogEl.scrollTop = debugLogEl.scrollHeight;
+        }
+
+        function setStatus(text) {
+            statusEl.textContent = text;
+        }
+
+        function ensureNetwork() {
+            if (network) return network;
+            network = new ServerNetwork(new UUID());
+            // network.receivedData = (data, isBinary) => { receiveDataFromPlayer(data, 1 , isBinary) };
+            network.receiveDataFromPlayer = (data, from, isBinary) => { receiveDataFromPlayer(data, from, isBinary) };
+
+            return network;
+        }
+
+        function refreshPeers() {
+            if (!network) {
+                peerListEl.value = 'No peers yet';
+                return;
+            }
+
+            const ids = Object.keys(network.Connections || {});
+            peerListEl.value = ids.length ? ids.join(', ') : 'No peers yet';
+        }
+
+        async function createRoom() {
+            appendLog('creating room...');
+            const net = ensureNetwork();
+            appendLog('Connection waiting');
+            await net.isReady;
+            appendLog('Connection ready');
+
+            const roomName = roomNameEl.value.trim() || 'debug-room';
+            const result = await net.CreateServer(roomName);
+            setStatus(`Host in room: ${roomName}`);
+            appendLog(`Created room ${roomName}: ${JSON.stringify(result)}`);
+            refreshPeers();
+        }
+
+        async function joinRoom() {
+            appendLog('joining room...');
+            const net = ensureNetwork();
+            await net.isReady;
+            const roomName = roomNameEl.value.trim() || 'debug-room';
+            const result = await net.JoinServer(roomName);
+            setStatus(`Joined room: ${roomName}`);
+            appendLog(`Joined room ${roomName}: ${JSON.stringify(result)}`);
+            refreshPeers();
+        }
+
+        function sendPayload() {
+            if (!network || !Object.keys(network.Connections || {}).length) {
+                appendLog('No peer connected yet. Create or join a room, then open a second tab/window.');
+                return;
+            }
+
+            const payloadType = payloadTypeEl.value;
+            const value = payloadTextEl.value;
+            const peers = Object.keys(network.Connections || {});
+
+            if (payloadType === 'json') {
+                try {
+                    const json = JSON.parse(value || '{}');
+                    network.sendToPlayers(JSON.stringify(json), false);
+                    appendLog(`Sent JSON to ${peers.join(', ')}: ${JSON.stringify(json, null, 2)}`);
+                    return;
+                } catch (err) {
+                    appendLog('Invalid JSON payload: ' + err.message);
+                    return;
+                }
+            }
+
+            if (payloadType === 'binary') {
+                const numbers = (value || '')
+                    .split(',')
+                    .map((part) => Number(part.trim()))
+                    .filter((part) => !Number.isNaN(part) && part >= 0 && part <= 255);
+
+                if (!numbers.length) {
+                    appendLog('Invalid binary payload. Use comma-separated bytes like 1,2,3,4');
+                    return;
+                }
+
+                const buffer = Uint8Array.from(numbers).buffer;
+                network.sendToPlayers(buffer, true);
+                appendLog(`Sent binary to ${peers.join(', ')}: ${numbers.join(', ')}`);
+                return;
+            }
+
+            const text = value || 'hello from debug';
+            network.sendToPlayers(text, false);
+            appendLog(`Sent text to ${peers.join(', ')}: ${text}`);
+        }
+
+        function receiveDataFromPlayer(data, from, isBinary) {
+                console.log("received data from player", data, from, isBinary)
+                if (isBinary) {
+                    let z = new Float32Array(data, this.server.headerLength); // skip first 4 bytes which are player id
+                    console.log(from, 'received:', data.byteLength, ' bytes binary data', z);
+                } else {
+                    switch (data.type) {
+                        case NetworkUpdates.PLAYER_JOIN.ID:
+                            break;
+                        case NetworkUpdates.PLAYER_LEAVE.ID:
+                            break;
+                        case NetworkUpdates.PLAYER_MOVE.ID:
+                            break;
+                        default:
+                            break;
+                    }
+                }
+
+            }
+
+        document.getElementById('createServerBtn').addEventListener('click', createRoom);
+        document.getElementById('joinServerBtn').addEventListener('click', joinRoom);
+        document.getElementById('sendPayloadBtn').addEventListener('click', sendPayload);
+
+        setInterval(() => refreshPeers(), 500);
+        appendLog('RTC debug panel ready. Create or join a room in two tabs to test peer traffic.');
+    </script>
 </body>
 
 </html>
