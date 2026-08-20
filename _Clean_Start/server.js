@@ -1,3 +1,6 @@
+const http = require('http');
+const https = require('https');
+const path = require('path');
 const Koa = require('koa');
 const Router = require('@koa/router');
 const fs = require('fs');
@@ -5,10 +8,38 @@ const { bodyParser } = require("@koa/bodyparser");
 const { WebSocket, WebSocketServer } = require("ws");
 // import WebSocket, { WebSocketServer } from 'ws';
 
-const wss = new WebSocketServer({ port: 8888 });
+const port = 3000;
+const signalPort = Number(process.env.SIGNAL_PORT || 8088);
 const app = new Koa();
 const router = new Router();
-const port = 3000;
+
+const tlsCertPath = process.env.WSS_CERT || process.env.TLS_CERT;
+const tlsKeyPath = process.env.WSS_KEY || process.env.TLS_KEY;
+const useSecureSignalServer = Boolean(tlsCertPath && tlsKeyPath);
+
+const signalOptions = useSecureSignalServer ? {
+    key: fs.readFileSync(tlsKeyPath),
+    cert: fs.readFileSync(tlsCertPath),
+} : null;
+
+const signalingServer = signalOptions
+    ? https.createServer(signalOptions, app.callback())
+    : http.createServer(app.callback());
+
+wss = useSecureSignalServer
+    ? new WebSocketServer({ server: signalingServer })
+    : new WebSocketServer({ port: signalPort });
+
+if (useSecureSignalServer) {
+    signalingServer.listen(signalPort, '0.0.0.0', function () {
+        console.log("Secure signaling server listening on wss://0.0.0.0:" + signalPort);
+    });
+} else {
+    signalingServer.listen(signalPort, '0.0.0.0', function () {
+        console.log("Signal server listening on ws://0.0.0.0:" + signalPort);
+    });
+}
+
 
 function sendFile(ctx, fileName) {
     // ctx.body = index;
@@ -39,8 +70,7 @@ router.get(/\/[^\/]+\.[\w]+/, async (ctx, next) => {
     }
 
 });
-
-app.listen(port, '0.0.0.0', function () {
+const httpServer = app.listen(port, '0.0.0.0', function () {
     console.log("Listening on " + port);
 });
 

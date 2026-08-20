@@ -117,14 +117,14 @@ const createScene = async function () {
     shadowGen.usePercentageCloserFiltering = true;
     shadowGen.filteringQuality = BABYLON.ShadowGenerator.FILTER_PCF;
     scene.shadowGen = shadowGen;
-    
+
     const baseMat = new BABYLON.StandardMaterial("sunMat", scene);
     const sun = BABYLON.MeshBuilder.CreateSphere("sunMesh", { diameter: 6, segments: 4 }, scene);
     sun.material = baseMat;
     const sunShape = new BABYLON.PhysicsShapeSphere(new BABYLON.Vector3(0, 0, 0), 3, scene);
     let phy_sun = new BABYLON.PhysicsBody(sun, BABYLON.PhysicsMotionType.STATIC, false, scene);
     sunShape.density = 2;
-    sunShape.material = { friction: 0.2, restitution: 0.2 };
+    sunShape.material = { friction: 0.2, restitution: 0.2, restitutionCombine: BABYLON.PhysicsMaterialCombineMode.ARITHMETIC_MEAN };
     phy_sun.shape = (sunShape);
     const gl = new BABYLON.GlowLayer("glow", scene);
     gl.intensity = 0.5;

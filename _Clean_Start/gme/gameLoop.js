@@ -105,7 +105,7 @@ class GameLoop {
             // console.log("mouse down", xvt.button, xvt)
             if (xvt.button == 0) { }
             switch (xvt.button) {
-                case 0: this.singleFromPlayer(this.craft.position.clone(), craftPointing, 1, 0.25, 100); break;
+                case 0: this.singleFromPlayer(this.craft.position.clone(), craftPointing, 0.01, 0.25, 1000); break;
                 case 1: break; // middle click
                 case 2: break; // right click
                 default: break;

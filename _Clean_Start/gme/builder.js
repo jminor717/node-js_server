@@ -132,7 +132,7 @@ class Builder {
 
         let shape = new BABYLON.PhysicsShapeSphere(new BABYLON.Vector3(0, 0, 0), radius, this.scene);
 
-        let body = this.bindBodyShape(sphere, shape, this.scene, { friction: 0.2, restitution: 0.001 });
+        let body = this.bindBodyShape(sphere, shape, this.scene, { friction: 0.9, restitution: 0, restitutionCombine: BABYLON.PhysicsMaterialCombineMode.ARITHMETIC_MEAN });
         body.setMassProperties({ mass: mass });
         body.setLinearVelocity(direction.normalize().scale(speed));
         this.scene.shadowGen.addShadowCaster(sphere);
@@ -151,6 +151,7 @@ class Builder {
         let body = new BABYLON.PhysicsBody(mesh, BABYLON.PhysicsMotionType.DYNAMIC, false, scene);
 
         shape.density = 2;
+        physicsMaterial.restitutionCombine = BABYLON.PhysicsMaterialCombineMode.ARITHMETIC_MEAN;
         shape.material = (physicsMaterial);
         body.shape = (shape);
         // body.setMassProperties({ mass: 1 });
@@ -216,7 +217,7 @@ class Builder {
 
         let wallShape = new BABYLON.PhysicsShapeBox(new BABYLON.Vector3(0, 0, 0), rotation, new BABYLON.Vector3(dimensions.x, dimensions.y, dimensions.z), scene);
         let wallBody = new BABYLON.PhysicsBody(wall, BABYLON.PhysicsMotionType.STATIC, false, scene);
-        let wallMaterial = { friction: 0.2, restitution: 0.8 };
+        let wallMaterial = { friction: 0.2, restitution: 0.8, restitutionCombine: BABYLON.PhysicsMaterialCombineMode.ARITHMETIC_MEAN };
         wallShape.material = (wallMaterial);
         wallBody.shape = (wallShape);
         wallBody.setMassProperties({ mass: 0, });

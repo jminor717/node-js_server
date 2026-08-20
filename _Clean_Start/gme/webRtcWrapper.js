@@ -1,7 +1,25 @@
 'use strict';
 import { ServerNetwork, UUID } from './serverNetworking.js';
 
-const servers = null;
+const DEFAULT_ICE_SERVERS = [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' },
+];
+
+function getIceConfig() {
+    const customIceServers = typeof window !== 'undefined' && Array.isArray(window.__GAME_ICE_SERVERS__)
+        ? window.__GAME_ICE_SERVERS__
+        : null;
+
+    return {
+        iceServers: customIceServers && customIceServers.length ? customIceServers : DEFAULT_ICE_SERVERS,
+        iceTransportPolicy: 'all',
+        iceCandidatePoolSize: 0,
+    };
+}
+
+const servers = getIceConfig();
 
 
 class RTCPeer {
@@ -34,12 +52,12 @@ class RTCPeer {
 
     onReceiveMessageCallback(event) {
         console.log('Received Message', event);
-        this.receivedData(data, isBinary);
+        // this.receivedData(data, isBinary);
         //todo receive Data   event.data
     }
 
     sendData(data){
-        if (this.Connected) {
+        if (this.Connected && this.sendChannel && this.sendChannel.readyState === "open") {
             this.sendChannel.send(data)
         }
     }
@@ -52,6 +70,13 @@ class RTCPeer {
         this.localConnection = new RTCPeerConnection(servers);
         // this.localConnection.addEventListener('datachannel', (event) => { console.log("data chan", event) });
         console.log(this.MyId, 'Created local peer connection object localConnection', this.RemoteId);
+
+        this.localConnection.oniceconnectionstatechange = () => {
+            console.log('ICE connection state:', this.localConnection.iceConnectionState);
+        };
+        this.localConnection.onconnectionstatechange = () => {
+            console.log('Peer connection state:', this.localConnection.connectionState);
+        };
 
         this.sendChannel = this.localConnection.createDataChannel('sendDataChannel');
         this.sendChannel.onopen = (event) => this.onSendChannelStateChange(event);
@@ -94,6 +119,13 @@ class RTCPeer {
         this.localConnection = new RTCPeerConnection(servers);
         console.log(this.MyId, 'Created _remote_ peer connection object localConnection', this.RemoteId);
         // this.localConnection.addEventListener('datachannel', (event) => { console.log("data chan", event) });
+
+        this.localConnection.oniceconnectionstatechange = () => {
+            console.log('ICE connection state:', this.localConnection.iceConnectionState);
+        };
+        this.localConnection.onconnectionstatechange = () => {
+            console.log('Peer connection state:', this.localConnection.connectionState);
+        };
 
         this.localConnection.onicecandidate = e => {
             this.Server.relayCandidate(this.RemoteId, e.candidate)

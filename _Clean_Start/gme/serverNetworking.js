@@ -30,6 +30,19 @@ class UUID {
     }
 }
 
+const DEFAULT_SIGNAL_PORT = 8088;
+
+function getSignalServerUrl() {
+    const override = typeof window !== 'undefined' && window.__GAME_SIGNAL_URL__ ? window.__GAME_SIGNAL_URL__ : null;
+    if (override) return override;
+
+    const isSecure = typeof window !== 'undefined' && window.location && window.location.protocol === 'https:';
+    const hostname = typeof window !== 'undefined' && window.location ? window.location.hostname : 'localhost';
+    const port = typeof window !== 'undefined' && window.__GAME_SIGNAL_PORT__ ? window.__GAME_SIGNAL_PORT__ : DEFAULT_SIGNAL_PORT;
+
+    return `${isSecure ? 'wss:' : 'ws:'}//${hostname}:${port}`;
+}
+
 class ServerNetwork {
     /**
      * @param {UUID} myId 
@@ -43,7 +56,7 @@ class ServerNetwork {
         this.receiveDataFromPlayer = (data, from, isBinary) => { }
         this.headerLength = 8; // 4 bytes for from id, 4 to id
 
-        this.socket = new WebSocket("ws://localhost:8888"); // wss://
+        this.socket = new WebSocket(getSignalServerUrl()); // wss://
 
         // Change binary type from "blob" to "arraybuffer" to receive binary data as ArrayBuffer
         // keeps data in memory and modifiable
